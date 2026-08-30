@@ -1,4 +1,4 @@
-package dev.vitorpaulo.blog.repository;
+package dev.vitorpaulo.blog.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -22,13 +22,13 @@ import java.util.Set;
 import java.util.UUID;
 
 @Entity
-@Table(name = "post")
+@Table(name = "project")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PostEntity {
+public class ProjectEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -41,51 +41,23 @@ public class PostEntity {
     @Column(name = "title", nullable = false)
     private String title;
 
-    @Column(name = "banner_url")
-    private String bannerUrl;
+    @Column(name = "logo_url")
+    private String logoUrl;
 
-    @Column(name = "content", nullable = false, columnDefinition = "TEXT")
-    private String content;
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
 
-    @Column(name = "language")
-    private String language;
-
-    @Column(name = "view_count", nullable = false)
-    @Builder.Default
-    private Long viewCount = 0L;
-
-    @Column(name = "average_reading_time_seconds")
-    private Integer averageReadingTimeSeconds;
-
-    @Column(name = "estimated_reading_time_minutes")
-    private Integer estimatedReadingTimeMinutes;
+    @Column(name = "programming_language")
+    private String programmingLanguage;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
-            name = "post_author",
-            joinColumns = @JoinColumn(name = "post_id"),
+            name = "project_author",
+            joinColumns = @JoinColumn(name = "project_id"),
             inverseJoinColumns = @JoinColumn(name = "author_id")
     )
     @Builder.Default
     private Set<AuthorEntity> authors = new HashSet<>();
-
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "post_tag",
-            joinColumns = @JoinColumn(name = "post_id"),
-            inverseJoinColumns = @JoinColumn(name = "tag_id")
-    )
-    @Builder.Default
-    private Set<TagEntity> tags = new HashSet<>();
-
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "post_project",
-            joinColumns = @JoinColumn(name = "post_id"),
-            inverseJoinColumns = @JoinColumn(name = "project_id")
-    )
-    @Builder.Default
-    private Set<ProjectEntity> projects = new HashSet<>();
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;

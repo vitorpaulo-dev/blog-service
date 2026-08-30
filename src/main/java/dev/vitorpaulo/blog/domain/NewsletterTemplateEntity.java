@@ -1,4 +1,4 @@
-package dev.vitorpaulo.blog.repository;
+package dev.vitorpaulo.blog.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,13 +16,13 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "tag")
+@Table(name = "newsletter_template")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TagEntity {
+public class NewsletterTemplateEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -32,11 +32,11 @@ public class TagEntity {
     @Column(name = "name", nullable = false, unique = true)
     private String name;
 
-    @Column(name = "slug", nullable = false, unique = true)
-    private String slug;
+    @Column(name = "subject", nullable = false)
+    private String subject;
 
-    @Column(name = "description")
-    private String description;
+    @Column(name = "content", nullable = false, columnDefinition = "TEXT")
+    private String content;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;

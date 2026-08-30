@@ -1,10 +1,15 @@
-package dev.vitorpaulo.blog.repository;
+package dev.vitorpaulo.blog.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,49 +17,40 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import dev.vitorpaulo.blog.model.NewsletterCampaignStatus;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "author")
+@Table(name = "newsletter_campaign")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AuthorEntity {
+public class NewsletterCampaignEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "clerk_user_id", unique = true)
-    private String clerkUserId;
+    @Column(name = "subject", nullable = false)
+    private String subject;
 
-    @Column(name = "name", nullable = false)
-    private String name;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "template_id")
+    private NewsletterTemplateEntity template;
 
-    @Column(name = "avatar_url")
-    private String avatarUrl;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private NewsletterCampaignStatus status;
 
-    @Column(name = "job_title")
-    private String jobTitle;
+    @Column(name = "scheduled_at")
+    private OffsetDateTime scheduledAt;
 
-    @Column(name = "bio", columnDefinition = "TEXT")
-    private String bio;
-
-    @Column(name = "github_url")
-    private String githubUrl;
-
-    @Column(name = "linkedin_url")
-    private String linkedinUrl;
-
-    @Column(name = "instagram_url")
-    private String instagramUrl;
-
-    @Column(name = "website_url")
-    private String websiteUrl;
+    @Column(name = "sent_at")
+    private OffsetDateTime sentAt;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;

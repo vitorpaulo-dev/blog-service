@@ -1,4 +1,4 @@
-package dev.vitorpaulo.blog.repository;
+package dev.vitorpaulo.blog.model;
 
 public enum NewsletterCampaignStatus {
     DRAFT,
