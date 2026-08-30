@@ -4,7 +4,7 @@ import dev.vitorpaulo.blog.config.exception.NotFoundException;
 import dev.vitorpaulo.blog.config.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.config.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.model.post.Post;
-import dev.vitorpaulo.blog.output.PostOutput;
+import dev.vitorpaulo.blog.output.post.PostOutput;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;

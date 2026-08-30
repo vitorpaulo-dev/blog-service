@@ -1,10 +1,4 @@
 package dev.vitorpaulo.blog.output;
 
-import dev.vitorpaulo.blog.model.ReactionTargetType;
-
-import java.util.UUID;
-
-public interface ReactionOutput {
-
-    long countByTargetTypeAndTargetId(ReactionTargetType targetType, UUID targetId);
+public interface ReactionOutput extends dev.vitorpaulo.blog.output.reaction.ReactionOutput {
 }
