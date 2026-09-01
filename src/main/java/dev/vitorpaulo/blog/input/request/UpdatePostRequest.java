@@ -1,6 +1,8 @@
 package dev.vitorpaulo.blog.input.request;
 
+import dev.vitorpaulo.blog.model.PostStatus;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
@@ -12,5 +14,5 @@ public record UpdatePostRequest(
         @Size(max = 10) String language,
         List<UUID> tagIds,
         List<UUID> projectIds,
-        String status
+        @NotNull PostStatus status
 ) {}

@@ -7,5 +7,5 @@ import dev.vitorpaulo.blog.domain.AuthorEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AuthorRepository extends JpaRepository<AuthorEntity, UUID> {
-    Optional<AuthorEntity> findByClerkUserId(String clerkUserId);
+    Optional<AuthorEntity> findBySubjectId(String subjectId);
 }

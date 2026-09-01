@@ -1,11 +1,6 @@
 package dev.vitorpaulo.blog.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -29,8 +24,8 @@ public class AuthorEntity {
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "clerk_user_id", unique = true)
-    private String clerkUserId;
+    @Column(name = "subject_id", unique = true)
+    private String subjectId;
 
     @Column(name = "name", nullable = false)
     private String name;
@@ -61,4 +56,15 @@ public class AuthorEntity {
 
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime updatedAt;
+
+	@PrePersist
+	void onCreate() {
+		createdAt = OffsetDateTime.now();
+		updatedAt = OffsetDateTime.now();
+	}
+
+	@PreUpdate
+	void onUpdate() {
+		updatedAt = OffsetDateTime.now();
+	}
 }

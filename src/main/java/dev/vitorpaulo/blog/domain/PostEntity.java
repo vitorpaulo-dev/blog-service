@@ -1,26 +1,17 @@
 package dev.vitorpaulo.blog.domain;
 
-import dev.vitorpaulo.blog.model.post.PostStatus;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.Table;
+import dev.vitorpaulo.blog.model.PostStatus;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.Formula;
 
 import java.time.OffsetDateTime;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -55,21 +46,10 @@ public class PostEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    @Builder.Default
-    private PostStatus status = PostStatus.DRAFT;
+    private PostStatus status;
 
-    @Column(name = "view_count", nullable = false)
-    @Builder.Default
-    private Long viewCount = 0L;
-
-    @Column(name = "average_reading_time_seconds")
-    private Integer averageReadingTimeSeconds;
-
-    @Column(name = "estimated_reading_time_minutes")
-    private Integer estimatedReadingTimeMinutes;
-
-    @Column(name = "last_viewed_at")
-    private OffsetDateTime lastViewedAt;
+    @Column(name = "estimated_reading")
+    private Long estimatedReading;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -77,8 +57,7 @@ public class PostEntity {
             joinColumns = @JoinColumn(name = "post_id"),
             inverseJoinColumns = @JoinColumn(name = "author_id")
     )
-    @Builder.Default
-    private Set<AuthorEntity> authors = new HashSet<>();
+    private List<AuthorEntity> authors;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -86,8 +65,7 @@ public class PostEntity {
             joinColumns = @JoinColumn(name = "post_id"),
             inverseJoinColumns = @JoinColumn(name = "tag_id")
     )
-    @Builder.Default
-    private Set<TagEntity> tags = new HashSet<>();
+    private List<TagEntity> tags;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -95,12 +73,37 @@ public class PostEntity {
             joinColumns = @JoinColumn(name = "post_id"),
             inverseJoinColumns = @JoinColumn(name = "project_id")
     )
-    @Builder.Default
-    private Set<ProjectEntity> projects = new HashSet<>();
+    private List<ProjectEntity> projects;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime updatedAt;
+
+	@Column(name = "view_count", nullable = false)
+	private Long viewCount;
+
+	@Column(name = "love_count", nullable = false)
+	private Long loveCount;
+
+	@Column(name = "celebrate_count", nullable = false)
+	private Long celebrateCount;
+
+	@Column(name = "genius_count", nullable = false)
+	private Long geniusCount;
+
+	@Column(name = "help_count", nullable = false)
+	private Long helpCount;
+
+	@PrePersist
+	void onCreate() {
+		createdAt = OffsetDateTime.now();
+		updatedAt = OffsetDateTime.now();
+	}
+
+	@PreUpdate
+	void onUpdate() {
+		updatedAt = OffsetDateTime.now();
+	}
 }

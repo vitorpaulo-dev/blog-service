@@ -1,25 +1,25 @@
-package dev.vitorpaulo.blog.input.response;
+package dev.vitorpaulo.blog.model;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-public record PostResponse(
+public record PostModel(
         UUID id,
         String slug,
         String title,
         String bannerUrl,
         String content,
         String language,
-        String status,
+        PostStatus status,
         Integer estimatedReading,
         OffsetDateTime lastViewedAt,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
-        List<AuthorResponse> authors,
-		List<TagResponse> tags,
-		List<ProjectResponse> projects,
+		List<AuthorModel> authors,
+        List<TagModel> tags,
+		List<ProjectModel> projects,
 		Long viewCount,
 		Long loveCount,
 		Long celebrateCount,

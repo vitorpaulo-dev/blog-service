@@ -1,37 +1,119 @@
 package dev.vitorpaulo.blog.output.post;
 
-import dev.vitorpaulo.blog.model.post.Post;
-import dev.vitorpaulo.blog.model.post.PostStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import dev.vitorpaulo.blog.common.exception.NotFoundException;
+import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
+import dev.vitorpaulo.blog.common.util.PostUtils;
+import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
+import dev.vitorpaulo.blog.output.mapper.TagMapper;
+import dev.vitorpaulo.blog.output.mapper.ProjectMapper;
+import dev.vitorpaulo.blog.model.*;
+import dev.vitorpaulo.blog.model.common.PaginatedInput;
+import dev.vitorpaulo.blog.model.common.PaginatedOutput;
+import dev.vitorpaulo.blog.repository.PostRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
-public interface PostOutput {
+import static dev.vitorpaulo.blog.common.util.RoleUtils.isAdmin;
 
-    Optional<Post> findById(UUID id);
+@Component
+@RequiredArgsConstructor
+public class PostOutput {
 
-    Optional<Post> findBySlug(String slug);
+    private final PostRepository postRepository;
+    private final PostOutputMapper postOutputMapper;
+    private final TagMapper tagMapper;
+    private final ProjectMapper projectMapper;
 
-    boolean existsBySlug(String slug);
+    public PostModel findById(UUID id) {
+        return postRepository.findById(id)
+                .map(postOutputMapper::toModel)
+                .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
+    }
 
-    Post save(Post post);
+    @Transactional
+    public PostModel findBySlugAndIncrementView(String slug) {
+        final var entity = postRepository.findBySlug(slug)
+                .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_SLUG_NOT_FOUND));
+        entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
 
-    void delete(UUID id);
+        return postOutputMapper.toModel(postRepository.save(entity));
+    }
 
-    void deleteAll(List<UUID> ids);
+    @Transactional
+    public PostModel save(PostModel post, List<TagModel> tags, List<ProjectModel> projects, AuthorModel author) {
+        final var slug = generateUniqueSlug(post.title(), null);
+        final var reading = PostUtils.computeReadingTime(post.content());
+        final var authors = List.of(author);
 
-    List<Post> findAllById(List<UUID> ids);
+		final var postEntity = postOutputMapper.toEntity(post, reading, authors, tags, projects);
+		postEntity.setSlug(slug);
+        return postOutputMapper.toModel(postRepository.save(postEntity));
+    }
 
-    Page<Post> findAll(Pageable pageable);
+    @Transactional
+    public PostModel update(PostModel post, List<TagModel> tags, List<ProjectModel> projects, AuthorModel author) {
+        final var entity = postRepository.findByIdWithAuthor(post.id(), author.id(), isAdmin(author.role()))
+                .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
+        postOutputMapper.updateEntity(post, entity);
+		entity.setEstimatedReading(PostUtils.computeReadingTime(post.content()));
 
-    Page<Post> findByStatus(PostStatus status, Pageable pageable);
+        if (post.title() != null && !post.title().equalsIgnoreCase(entity.getSlug())) {
+            entity.setSlug(generateUniqueSlug(post.title(), entity.getId()));
+        }
 
-    Page<Post> search(String query, PostStatus status, Pageable pageable);
+        if (tags != null) {
+            entity.setTags(tagMapper.toEntitySet(tags));
+        }
 
-    Page<Post> searchPublished(String query, Pageable pageable);
+        if (projects != null) {
+            entity.setProjects(projectMapper.toEntitySet(projects));
+        }
 
-    Page<Post> searchVisible(String query, String clerkUserId, Pageable pageable);
+        return postOutputMapper.toModel(postRepository.save(entity));
+    }
+
+    @Transactional
+    public void deleteAll(List<UUID> ids, AuthorModel author) {
+        postRepository.deleteByIdWithAuthor(ids, author.id(), isAdmin(author.role()));
+    }
+
+	public PaginatedOutput<PostModel> search(PaginatedInput<PostQueryModel> pageableInput, AuthorModel author) {
+		final var pageable = PageRequest.of(pageableInput.page(), pageableInput.size(), Sort.by(pageableInput.direction(), mapSortProperty(pageableInput.sort())));
+		final var result = postRepository.search(pageableInput.query().query(), pageableInput.query().authorId(), author == null, pageable)
+			.map(postOutputMapper::toModel);
+
+		return new PaginatedOutput<>(
+			result.getContent(),
+			result.getNumber(),
+			result.getSize(),
+			result.getTotalElements(),
+			result.getTotalPages()
+		);
+	}
+
+    private String generateUniqueSlug(String title, UUID currentId) {
+        final var base = PostUtils.slugify(title);
+        final var counter = postRepository.countBySlugAndIdNot(base, currentId);
+        if (counter == 0) {
+            return base;
+        }
+
+        return base + "-" + counter + 1;
+    }
+
+    private String mapSortProperty(String sort) {
+        return switch (sort) {
+            case "viewCount", "view_count" -> "viewCount";
+            case "updatedAt" -> "updatedAt";
+            case "title" -> "title";
+            case "slug" -> "slug";
+            default -> "createdAt";
+        };
+    }
 }
