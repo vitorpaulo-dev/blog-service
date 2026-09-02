@@ -24,5 +24,6 @@ public record PostResponse(
 		Long loveCount,
 		Long celebrateCount,
 		Long geniusCount,
-		Long helpCount
+		Long helpCount,
+		Long reactionCount
 ) {}

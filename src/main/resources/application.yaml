@@ -42,4 +42,5 @@ management:
         include: health,info,flyway
 
 clerk:
+    organization-id: ${CLERK_ORGANIZATION_ID:}
     api-token: ${CLERK_API_TOKEN:}

@@ -36,6 +36,7 @@ public class PostController {
     private final GetPostByIdUseCase getPostByIdUseCase;
     private final GetPostBySlugUseCase getPostBySlugUseCase;
     private final SearchPostUseCase searchPostUseCase;
+
     private final PostInputMapper postInputMapper;
 
     @PostMapping
@@ -59,8 +60,7 @@ public class PostController {
 
     @GetMapping("/{id}")
     public PostResponse getById(@PathVariable UUID id) {
-        final var post = getPostByIdUseCase.execute(id);
-        return postInputMapper.toResponse(post);
+        return postInputMapper.toResponse(getPostByIdUseCase.execute(id));
     }
 
     @GetMapping("/slug/{slug}")
@@ -68,8 +68,8 @@ public class PostController {
         return postInputMapper.toResponse(getPostBySlugUseCase.execute(slug));
     }
 
-    @GetMapping
-    public GenericPageableResponse<PostResponse> search(@Valid GenericPageableRequest<PostQueryRequest> request, @CurrentAuthor AuthorModel author) {
+    @PostMapping("/search")
+    public GenericPageableResponse<PostResponse> search(@Valid @RequestBody GenericPageableRequest<PostQueryRequest> request, @CurrentAuthor AuthorModel author) {
         final var result = searchPostUseCase.execute(postInputMapper.toPageableInput(request), author);
         return postInputMapper.toPageableResponse(result);
     }

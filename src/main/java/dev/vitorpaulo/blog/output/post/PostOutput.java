@@ -84,8 +84,8 @@ public class PostOutput {
     }
 
 	public PaginatedOutput<PostModel> search(PaginatedInput<PostQueryModel> pageableInput, AuthorModel author) {
-		final var pageable = PageRequest.of(pageableInput.page(), pageableInput.size(), Sort.by(pageableInput.direction(), mapSortProperty(pageableInput.sort())));
-		final var result = postRepository.search(pageableInput.query().query(), pageableInput.query().authorId(), author == null, pageable)
+		final var pageable = PageRequest.of(pageableInput.page(), pageableInput.size());
+		final var result = postRepository.search(pageableInput.query().query(), pageableInput.query().authorId(), author == null, pageable, mapSortProperty(pageableInput.sort(), pageableInput.direction()))
 			.map(postOutputMapper::toModel);
 
 		return new PaginatedOutput<>(
@@ -107,13 +107,13 @@ public class PostOutput {
         return base + "-" + counter + 1;
     }
 
-    private String mapSortProperty(String sort) {
+    private String mapSortProperty(String sort, Sort.Direction direction) {
         return switch (sort) {
-            case "viewCount", "view_count" -> "viewCount";
-            case "updatedAt" -> "updatedAt";
-            case "title" -> "title";
             case "slug" -> "slug";
-            default -> "createdAt";
-        };
+			case "title" -> "title";
+			case "viewCount" -> "view_count";
+			case "reactionCount" -> "reactionCount";
+            default -> "created_at " + direction.name() + " updated_at";
+        } + " " + direction.name();
     }
 }

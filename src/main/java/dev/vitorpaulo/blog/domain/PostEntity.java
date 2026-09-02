@@ -51,7 +51,7 @@ public class PostEntity {
     @Column(name = "estimated_reading")
     private Long estimatedReading;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "post_author",
             joinColumns = @JoinColumn(name = "post_id"),
@@ -59,7 +59,7 @@ public class PostEntity {
     )
     private List<AuthorEntity> authors;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "post_tag",
             joinColumns = @JoinColumn(name = "post_id"),
@@ -67,7 +67,7 @@ public class PostEntity {
     )
     private List<TagEntity> tags;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "post_project",
             joinColumns = @JoinColumn(name = "post_id"),
@@ -95,6 +95,14 @@ public class PostEntity {
 
 	@Column(name = "help_count", nullable = false)
 	private Long helpCount;
+
+	@Formula("""
+		love_count
+		+ celebrate_count
+		+ genius_count
+		+ help_count
+    """)
+	private Integer reactionCount;
 
 	@PrePersist
 	void onCreate() {

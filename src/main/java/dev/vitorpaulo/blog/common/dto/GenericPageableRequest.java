@@ -7,7 +7,7 @@ import org.springframework.data.domain.Sort;
 public record GenericPageableRequest<T>(
         T query,
         @Min(0) Integer page,
-        @Min(1) @Max(50) Integer limit,
+        @Min(1) @Max(50) Integer size,
         String sort,
 		Sort.Direction direction
 ) {}

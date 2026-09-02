@@ -20,72 +20,74 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
 
     long countBySlugAndIdNot(String slug, UUID id);
 
-	@Query(value = """
-			SELECT p.*
-			FROM post p
-			WHERE
-				(
-					p.status = 'PUBLISHED'
-					OR (
-						:showDrafts = true
-						AND p.status = 'DRAFT'
-					)
-				)
-				AND (
-					:authorId IS NULL
-					OR EXISTS (
-						SELECT 1
-						FROM post_author pa
-						WHERE pa.post_id = p.id
-						  AND pa.author_id = :authorId
-					)
-				)
-				AND (
-					:query IS NULL
-					OR trim(:query) = ''
-					OR p.search_vector @@ websearch_to_tsquery('simple', :query)
-				)
-			ORDER BY
-				CASE
-					WHEN :query IS NULL OR trim(:query) = ''
-					THEN 0
-					ELSE ts_rank(p.search_vector, websearch_to_tsquery('simple', :query))
-				END DESC,
-				p.created_at DESC
-		""",
+	@Query(
+		value = """
+        SELECT p.*, (love_count + celebrate_count + genius_count + help_count) as reactionCount
+        FROM post p
+        WHERE
+            (
+                p.status = 'PUBLISHED'
+                OR (
+                    :showDrafts = true
+                    AND p.status = 'DRAFT'
+                )
+            )
+            AND (
+                :authorId IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM post_author pa
+                    WHERE pa.post_id = p.id
+                      AND pa.author_id = :authorId
+                )
+            )
+            AND (
+                :query IS NULL
+                OR p.search_vector @@ websearch_to_tsquery('simple', :query)
+            )
+        ORDER BY
+            CASE
+                WHEN :query IS NULL THEN 0
+                ELSE ts_rank(
+                    p.search_vector,
+                    websearch_to_tsquery('simple', :query)
+                )
+            END DESC,
+            :sort
+        """,
 		countQuery = """
-			SELECT COUNT(*)
-			FROM post p
-			WHERE
-				(
-					p.status = 'PUBLISHED'
-					OR (
-						:showDrafts = true
-						AND p.status = 'DRAFT'
-					)
-				)
-				AND (
-					:authorId IS NULL
-					OR EXISTS (
-						SELECT 1
-						FROM post_author pa
-						WHERE pa.post_id = p.id
-						  AND pa.author_id = :authorId
-					)
-				)
-				AND (
-					:query IS NULL
-					OR trim(:query) = ''
-					OR p.search_vector @@ websearch_to_tsquery('simple', :query)
-				)
-		""",
+        SELECT COUNT(*)
+        FROM post p
+        WHERE
+            (
+                p.status = 'PUBLISHED'
+                OR (
+                    :showDrafts = true
+                    AND p.status = 'DRAFT'
+                )
+            )
+            AND (
+                :authorId IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM post_author pa
+                    WHERE pa.post_id = p.id
+                      AND pa.author_id = :authorId
+                )
+            )
+            AND (
+                :query IS NULL
+                OR p.search_vector @@ websearch_to_tsquery('simple', :query)
+            )
+        """,
 		nativeQuery = true
 	)
 	Page<PostEntity> search(
 		String query,
 		UUID authorId,
 		boolean showDrafts,
-		Pageable pageable
+		Pageable pageable,
+		String sort
 	);
 
 	@Modifying
