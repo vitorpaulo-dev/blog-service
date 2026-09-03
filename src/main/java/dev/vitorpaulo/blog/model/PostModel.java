@@ -14,7 +14,6 @@ public record PostModel(
         String language,
         PostStatus status,
         Integer estimatedReading,
-        OffsetDateTime lastViewedAt,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
 		List<AuthorModel> authors,

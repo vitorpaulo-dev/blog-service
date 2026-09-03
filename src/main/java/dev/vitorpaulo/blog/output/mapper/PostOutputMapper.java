@@ -13,11 +13,15 @@ import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import jakarta.validation.Valid;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
+import org.mapstruct.NullValuePropertyMappingStrategy;
 
 import java.util.List;
 import java.util.UUID;
 
-@Mapper(componentModel = "spring")
+@Mapper(
+	componentModel = "spring",
+	nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE
+)
 public interface PostOutputMapper {
 
     PostModel toModel(PostEntity entity);
@@ -25,7 +29,6 @@ public interface PostOutputMapper {
     PostEntity toEntity(PostModel enriched, Long estimatedReading, List<AuthorModel> authors, List<TagModel> tags, List<ProjectModel> projects);
 
 	void updateEntity(PostModel source, @MappingTarget PostEntity target);
-
 
 	PostResponse toResponse(PostModel model);
 
