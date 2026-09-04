@@ -1,10 +1,12 @@
 package dev.vitorpaulo.blog.input.response;
 
+import dev.vitorpaulo.blog.model.Language;
+
+import java.util.Map;
 import java.util.UUID;
 
 public record TagResponse(
         UUID id,
-        String name,
         String slug,
-        String description
+        Map<Language, TagContentResponse> translations
 ) {}

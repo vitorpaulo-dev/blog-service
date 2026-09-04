@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -30,14 +32,11 @@ public class AuthorEntity {
     @Column(name = "name", nullable = false)
     private String name;
 
+    @Column(name = "slug", nullable = false, unique = true)
+    private String slug;
+
     @Column(name = "avatar_url")
     private String avatarUrl;
-
-    @Column(name = "job_title")
-    private String jobTitle;
-
-    @Column(name = "bio", columnDefinition = "TEXT")
-    private String bio;
 
     @Column(name = "github_url")
     private String githubUrl;
@@ -51,20 +50,24 @@ public class AuthorEntity {
     @Column(name = "website_url")
     private String websiteUrl;
 
+    @OneToMany(mappedBy = "author", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @Builder.Default
+    private List<AuthorContentEntity> contents = new ArrayList<>();
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime updatedAt;
 
-	@PrePersist
-	void onCreate() {
-		createdAt = OffsetDateTime.now();
-		updatedAt = OffsetDateTime.now();
-	}
+    @PrePersist
+    void onCreate() {
+        createdAt = OffsetDateTime.now();
+        updatedAt = OffsetDateTime.now();
+    }
 
-	@PreUpdate
-	void onUpdate() {
-		updatedAt = OffsetDateTime.now();
-	}
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = OffsetDateTime.now();
+    }
 }

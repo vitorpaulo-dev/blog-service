@@ -10,6 +10,7 @@ import dev.vitorpaulo.blog.input.request.PostQueryRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
 import dev.vitorpaulo.blog.input.response.PostResponse;
 import dev.vitorpaulo.blog.model.AuthorModel;
+import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.usecase.post.CreatePostUseCase;
 import dev.vitorpaulo.blog.usecase.post.DeletePostUseCase;
 import dev.vitorpaulo.blog.usecase.post.GetPostByIdUseCase;
@@ -40,7 +41,7 @@ public class PostController {
     private final PostInputMapper postInputMapper;
 
     @PostMapping
-	@ResponseStatus(HttpStatus.CREATED)
+    @ResponseStatus(HttpStatus.CREATED)
     public PostResponse create(@Valid @RequestBody CreatePostRequest request, @CurrentAuthor AuthorModel author) {
         final var post = createPostUseCase.execute(postInputMapper.toModel(request), request.tagIds(), request.projectIds(), author);
         return postInputMapper.toResponse(post);
@@ -53,7 +54,7 @@ public class PostController {
     }
 
     @DeleteMapping
-	@ResponseStatus(HttpStatus.NO_CONTENT)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@Valid @RequestBody MassDeleteRequest request, @CurrentAuthor AuthorModel author) {
         deletePostUseCase.execute(request.ids(), author);
     }
@@ -63,9 +64,9 @@ public class PostController {
         return postInputMapper.toResponse(getPostByIdUseCase.execute(id));
     }
 
-    @GetMapping("/slug/{slug}")
-    public PostResponse getBySlug(@PathVariable String slug) {
-        return postInputMapper.toResponse(getPostBySlugUseCase.execute(slug));
+    @GetMapping("/slug/{slug}/{language}")
+    public PostResponse getBySlug(@PathVariable String slug, @PathVariable Language language) {
+        return postInputMapper.toResponse(getPostBySlugUseCase.execute(slug, language));
     }
 
     @PostMapping("/search")

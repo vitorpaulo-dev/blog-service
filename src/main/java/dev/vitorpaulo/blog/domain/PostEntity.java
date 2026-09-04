@@ -10,9 +10,8 @@ import lombok.Setter;
 import org.hibernate.annotations.Formula;
 
 import java.time.OffsetDateTime;
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -32,17 +31,8 @@ public class PostEntity {
     @Column(name = "slug", nullable = false, unique = true)
     private String slug;
 
-    @Column(name = "title", nullable = false)
-    private String title;
-
     @Column(name = "banner_url")
     private String bannerUrl;
-
-    @Column(name = "content", nullable = false, columnDefinition = "TEXT")
-    private String content;
-
-    @Column(name = "language")
-    private String language;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
@@ -50,6 +40,10 @@ public class PostEntity {
 
     @Column(name = "estimated_reading")
     private Long estimatedReading;
+
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @Builder.Default
+    private List<PostContentEntity> contents = new ArrayList<>();
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -81,37 +75,37 @@ public class PostEntity {
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime updatedAt;
 
-	@Column(name = "view_count", nullable = false)
-	private Long viewCount;
+    @Column(name = "view_count", nullable = false)
+    private Long viewCount;
 
-	@Column(name = "love_count", nullable = false)
-	private Long loveCount;
+    @Column(name = "love_count", nullable = false)
+    private Long loveCount;
 
-	@Column(name = "celebrate_count", nullable = false)
-	private Long celebrateCount;
+    @Column(name = "celebrate_count", nullable = false)
+    private Long celebrateCount;
 
-	@Column(name = "genius_count", nullable = false)
-	private Long geniusCount;
+    @Column(name = "genius_count", nullable = false)
+    private Long geniusCount;
 
-	@Column(name = "help_count", nullable = false)
-	private Long helpCount;
+    @Column(name = "help_count", nullable = false)
+    private Long helpCount;
 
-	@Formula("""
-		love_count
-		+ celebrate_count
-		+ genius_count
-		+ help_count
+    @Formula("""
+        love_count
+        + celebrate_count
+        + genius_count
+        + help_count
     """)
-	private Integer reactionCount;
+    private Integer reactionCount;
 
-	@PrePersist
-	void onCreate() {
-		createdAt = OffsetDateTime.now();
-		updatedAt = OffsetDateTime.now();
-	}
+    @PrePersist
+    void onCreate() {
+        createdAt = OffsetDateTime.now();
+        updatedAt = OffsetDateTime.now();
+    }
 
-	@PreUpdate
-	void onUpdate() {
-		updatedAt = OffsetDateTime.now();
-	}
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = OffsetDateTime.now();
+    }
 }

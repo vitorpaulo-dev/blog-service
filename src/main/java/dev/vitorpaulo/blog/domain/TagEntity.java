@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -24,20 +26,27 @@ public class TagEntity {
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "name", nullable = false, unique = true)
-    private String name;
-
     @Column(name = "slug", nullable = false, unique = true)
     private String slug;
 
-    @Column(name = "description")
-    private String description;
+    @OneToMany(mappedBy = "tag", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @Builder.Default
+    private List<TagContentEntity> contents = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-	@PrePersist
-	void onCreate() {
-		createdAt = OffsetDateTime.now();
-	}
+    @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime updatedAt;
+
+    @PrePersist
+    void onCreate() {
+        createdAt = OffsetDateTime.now();
+        updatedAt = OffsetDateTime.now();
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = OffsetDateTime.now();
+    }
 }
