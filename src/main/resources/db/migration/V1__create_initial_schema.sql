@@ -8,11 +8,10 @@ CREATE EXTENSION IF NOT EXISTS "citext";
 -- author
 CREATE TABLE author (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    clerk_user_id VARCHAR(255) UNIQUE,
+    subject_id VARCHAR(255) UNIQUE,
     name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL UNIQUE,
     avatar_url VARCHAR(1024),
-    job_title VARCHAR(255),
-    bio TEXT,
     github_url VARCHAR(1024),
     linkedin_url VARCHAR(1024),
     instagram_url VARCHAR(1024),
@@ -21,34 +20,99 @@ CREATE TABLE author (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_author_clerk_user_id ON author (clerk_user_id);
+CREATE INDEX idx_author_subject_id ON author (subject_id);
+CREATE INDEX idx_author_slug ON author (slug);
+
+-- author_content
+CREATE TABLE author_content (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    author_id UUID NOT NULL REFERENCES author(id) ON DELETE CASCADE,
+    language VARCHAR(10) NOT NULL CHECK (language IN ('ENGLISH', 'PORTUGUESE')),
+    bio TEXT,
+    job_title VARCHAR(255),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    search_vector TSVECTOR GENERATED ALWAYS AS (
+        setweight(
+            to_tsvector('simple', coalesce(bio, '')),
+            'A'
+        )
+    ) STORED,
+
+    UNIQUE(author_id, language)
+);
+
+CREATE INDEX idx_author_content_search
+    ON author_content USING GIN (search_vector);
 
 -- tag
 CREATE TABLE tag (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL UNIQUE,
     slug VARCHAR(255) NOT NULL UNIQUE,
-    description VARCHAR(1024),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_tag_slug ON tag (slug);
-CREATE INDEX idx_tag_name ON tag (name);
+
+-- tag_content
+CREATE TABLE tag_content (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tag_id UUID NOT NULL REFERENCES tag(id) ON DELETE CASCADE,
+    language VARCHAR(10) NOT NULL CHECK (language IN ('ENGLISH', 'PORTUGUESE')),
+    name VARCHAR(255) NOT NULL,
+    description VARCHAR(1024),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE(tag_id, language)
+);
+
+CREATE INDEX idx_tag_content_tag_id ON tag_content (tag_id);
 
 -- project
 CREATE TABLE project (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     slug VARCHAR(255) NOT NULL UNIQUE,
-    title VARCHAR(255) NOT NULL,
     logo_url VARCHAR(1024),
-    description TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PUBLISHED')),
     programming_language VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_project_slug ON project (slug);
+CREATE INDEX idx_prj_created_at
+    ON project (created_at DESC);
+CREATE INDEX idx_prj_status
+    ON project (status);
+
+-- project_content
+CREATE TABLE project_content (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    language VARCHAR(10) NOT NULL CHECK (language IN ('ENGLISH', 'PORTUGUESE')),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    search_vector TSVECTOR GENERATED ALWAYS AS (
+        setweight(
+            to_tsvector('simple', coalesce(title, '')),
+            'A'
+        ) ||
+        setweight(
+            to_tsvector('simple', coalesce(description, '')),
+            'B'
+        )
+    ) STORED,
+
+    UNIQUE(project_id, language)
+);
+
+CREATE INDEX idx_prj_content_search
+    ON project_content USING GIN (search_vector);
 
 -- project_author join (M:N)
 CREATE TABLE project_author (
@@ -64,21 +128,52 @@ CREATE INDEX idx_project_author_author_id ON project_author (author_id);
 CREATE TABLE post (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     slug VARCHAR(255) NOT NULL UNIQUE,
-    title VARCHAR(500) NOT NULL,
     banner_url VARCHAR(1024),
-    content TEXT NOT NULL,
-    language VARCHAR(10),
-    view_count BIGINT NOT NULL DEFAULT 0,
-    average_reading_time_seconds INTEGER,
-    estimated_reading_time_minutes INTEGER,
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PUBLISHED')),
+    estimated_reading BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    view_count BIGINT NOT NULL DEFAULT 0,
+    love_count BIGINT NOT NULL DEFAULT 0,
+    celebrate_count BIGINT NOT NULL DEFAULT 0,
+    genius_count BIGINT NOT NULL DEFAULT 0,
+    help_count BIGINT NOT NULL DEFAULT 0
 );
 
-CREATE INDEX idx_post_slug ON post (slug);
-CREATE INDEX idx_post_created_at ON post (created_at DESC);
-CREATE INDEX idx_post_view_count ON post (view_count DESC);
-CREATE INDEX idx_post_language ON post (language);
+CREATE INDEX idx_post_created_at
+    ON post (created_at DESC);
+CREATE INDEX idx_post_view_count
+    ON post (view_count DESC);
+CREATE INDEX idx_post_status
+    ON post (status);
+
+-- post_content
+CREATE TABLE post_content (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID NOT NULL REFERENCES post(id) ON DELETE CASCADE,
+    language VARCHAR(10) NOT NULL CHECK (language IN ('ENGLISH', 'PORTUGUESE')),
+    title VARCHAR(500) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    search_vector TSVECTOR GENERATED ALWAYS AS (
+        setweight(
+            to_tsvector('simple', coalesce(title, '')),
+            'A'
+        ) ||
+        setweight(
+            to_tsvector('simple', coalesce(content, '')),
+            'B'
+        )
+    ) STORED,
+
+    UNIQUE(post_id, language)
+);
+
+CREATE INDEX idx_post_content_search
+    ON post_content USING GIN (search_vector);
 
 -- post_author join (M:N, 1-3 enforced in UseCase)
 CREATE TABLE post_author (
@@ -109,59 +204,3 @@ CREATE TABLE post_project (
 
 CREATE INDEX idx_post_project_post_id ON post_project (post_id);
 CREATE INDEX idx_post_project_project_id ON post_project (project_id);
-
--- newsletter_subscription
-CREATE TABLE newsletter_subscription (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email CITEXT NOT NULL UNIQUE,
-    status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'UNSUBSCRIBED', 'BOUNCED')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_newsletter_subscription_email ON newsletter_subscription (email);
-CREATE INDEX idx_newsletter_subscription_status ON newsletter_subscription (status);
-
--- newsletter_template
-CREATE TABLE newsletter_template (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL UNIQUE,
-    subject VARCHAR(500) NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_newsletter_template_name ON newsletter_template (name);
-
--- newsletter_campaign
-CREATE TABLE newsletter_campaign (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    subject VARCHAR(500) NOT NULL,
-    template_id UUID REFERENCES newsletter_template(id) ON DELETE SET NULL,
-    status VARCHAR(50) NOT NULL CHECK (status IN ('DRAFT', 'SCHEDULED', 'SENDING', 'SENT', 'CANCELLED')),
-    scheduled_at TIMESTAMPTZ,
-    sent_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_newsletter_campaign_template_id ON newsletter_campaign (template_id);
-CREATE INDEX idx_newsletter_campaign_status ON newsletter_campaign (status);
-CREATE INDEX idx_newsletter_campaign_scheduled_at ON newsletter_campaign (scheduled_at);
-
--- reaction
-CREATE TABLE reaction (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    target_type VARCHAR(50) NOT NULL CHECK (target_type IN ('POST', 'PROJECT')),
-    target_id UUID NOT NULL,
-    clerk_user_id VARCHAR(255) NOT NULL,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('LIKE', 'LOVE', 'CELEBRATE')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_reaction_target_user UNIQUE (target_type, target_id, clerk_user_id)
-);
-
-CREATE INDEX idx_reaction_target ON reaction (target_type, target_id);
-CREATE INDEX idx_reaction_clerk_user_id ON reaction (clerk_user_id);
-CREATE INDEX idx_reaction_type ON reaction (type);
-CREATE INDEX idx_reaction_target_id ON reaction (target_id);

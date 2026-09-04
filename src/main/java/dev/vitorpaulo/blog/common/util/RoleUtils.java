@@ -1,0 +1,8 @@
+package dev.vitorpaulo.blog.common.util;
+
+public final class RoleUtils {
+
+	public static Boolean isAdmin(String role) {
+		return "org:admin".equalsIgnoreCase(role);
+	}
+}
