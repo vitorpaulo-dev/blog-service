@@ -12,7 +12,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -24,25 +23,25 @@ class CreatePostUseCaseTest {
     @Mock private PostOutput postOutput;
     @Mock private TagOutput tagOutput;
     @Mock private ProjectOutput projectOutput;
+    @Mock private PostModel post;
+    @Mock private AuthorModel author;
+    @Mock private TagModel tag;
+    @Mock private ProjectModel project;
 
     @InjectMocks
     private CreatePostUseCase createPostUseCase;
 
-    private AuthorModel author;
-    private PostModel post;
+    private UUID tagId;
+    private UUID projectId;
 
     @BeforeEach
     void setUp() {
-        author = new AuthorModel(UUID.randomUUID(), "clerk-1", "Author", "author", null, "org:admin", null);
-        post = mock(PostModel.class);
+        tagId = UUID.randomUUID();
+        projectId = UUID.randomUUID();
     }
 
     @Test
-    void shouldCreatePostWithTagsAndProjects() {
-        var tagId = UUID.randomUUID();
-        var projectId = UUID.randomUUID();
-        var tag = new TagModel(tagId, "tag-slug", Map.of());
-        var project = new ProjectModel(projectId, "proj-slug", null, null, Map.of());
+    void execute_withTagsAndProjects_returnsSavedPost() {
         var savedPost = mock(PostModel.class);
 
         when(tagOutput.findAllById(List.of(tagId))).thenReturn(List.of(tag));
@@ -58,7 +57,7 @@ class CreatePostUseCaseTest {
     }
 
     @Test
-    void shouldCreatePostWithoutTagsOrProjects() {
+    void execute_withoutTagsOrProjects_returnsSavedPost() {
         var savedPost = mock(PostModel.class);
 
         when(tagOutput.findAllById(null)).thenReturn(List.of());

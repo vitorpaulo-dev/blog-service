@@ -1,5 +1,6 @@
 package dev.vitorpaulo.blog.output.project;
 
+import dev.vitorpaulo.blog.domain.ProjectEntity;
 import dev.vitorpaulo.blog.model.ProjectModel;
 import dev.vitorpaulo.blog.output.mapper.ProjectMapper;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
@@ -20,32 +21,34 @@ class ProjectOutputTest {
 
     @Mock private ProjectRepository projectRepository;
     @Mock private ProjectMapper projectMapper;
+    @Mock private ProjectEntity projectEntity;
+    @Mock private ProjectModel projectModel;
 
     @InjectMocks
     private ProjectOutput projectOutput;
 
     @Test
-    void shouldReturnEmptyListWhenIdsIsNull() {
+    void findAllById_nullIds_returnsEmptyList() {
         var result = projectOutput.findAllById(null);
         assertTrue(result.isEmpty());
         verifyNoInteractions(projectRepository);
     }
 
     @Test
-    void shouldReturnEmptyListWhenIdsIsEmpty() {
+    void findAllById_emptyIds_returnsEmptyList() {
         var result = projectOutput.findAllById(List.of());
         assertTrue(result.isEmpty());
         verifyNoInteractions(projectRepository);
     }
 
     @Test
-    void shouldReturnProjectsWhenFound() {
+    void findAllById_withIds_returnsMappedModels() {
         var id1 = UUID.randomUUID();
         var id2 = UUID.randomUUID();
-        var entity1 = mock(dev.vitorpaulo.blog.domain.ProjectEntity.class);
-        var entity2 = mock(dev.vitorpaulo.blog.domain.ProjectEntity.class);
-        var model1 = new ProjectModel(id1, "slug-1", null, null, null);
-        var model2 = new ProjectModel(id2, "slug-2", null, null, null);
+        var entity1 = mock(ProjectEntity.class);
+        var entity2 = mock(ProjectEntity.class);
+        var model1 = mock(ProjectModel.class);
+        var model2 = mock(ProjectModel.class);
 
         when(projectRepository.findAllById(List.of(id1, id2))).thenReturn(List.of(entity1, entity2));
         when(projectMapper.toModel(entity1)).thenReturn(model1);

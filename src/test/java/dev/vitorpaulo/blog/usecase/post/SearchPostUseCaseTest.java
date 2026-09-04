@@ -23,14 +23,14 @@ import static org.mockito.Mockito.*;
 class SearchPostUseCaseTest {
 
     @Mock private PostOutput postOutput;
+    @Mock private AuthorModel author;
 
     @InjectMocks
     private SearchPostUseCase searchPostUseCase;
 
     @Test
-    void shouldDelegateSearchToOutput() {
-        var author = new AuthorModel(UUID.randomUUID(), "clerk-1", "Author", "author", null, "org:admin", null);
-        var query = new PostQueryModel("test", null, null);
+    void execute_withQuery_returnsPaginatedResults() {
+        var query = mock(PostQueryModel.class);
         var input = new PaginatedInput<>(query, 0, 10, "createdAt", Sort.Direction.DESC);
         var expected = new PaginatedOutput<PostModel>(List.of(), 0, 10, 0, 0);
 

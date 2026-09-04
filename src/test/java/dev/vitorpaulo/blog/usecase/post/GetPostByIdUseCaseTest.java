@@ -23,7 +23,7 @@ class GetPostByIdUseCaseTest {
     private GetPostByIdUseCase getPostByIdUseCase;
 
     @Test
-    void shouldReturnPostWhenFound() {
+    void execute_found_returnsPost() {
         var id = UUID.randomUUID();
         var expected = mock(PostModel.class);
         when(postOutput.findById(id)).thenReturn(expected);
@@ -34,7 +34,7 @@ class GetPostByIdUseCaseTest {
     }
 
     @Test
-    void shouldPropagateNotFound() {
+    void execute_notFound_throwsNotFoundException() {
         when(postOutput.findById(any())).thenThrow(new NotFoundException());
 
         assertThrows(NotFoundException.class, () -> getPostByIdUseCase.execute(UUID.randomUUID()));

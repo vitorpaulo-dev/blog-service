@@ -17,14 +17,14 @@ import static org.mockito.Mockito.*;
 class DeletePostUseCaseTest {
 
     @Mock private PostOutput postOutput;
+    @Mock private AuthorModel author;
 
     @InjectMocks
     private DeletePostUseCase deletePostUseCase;
 
     @Test
-    void shouldDelegateDeletionToOutput() {
+    void execute_withIds_delegatesToOutput() {
         var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
-        var author = new AuthorModel(UUID.randomUUID(), "clerk-1", "Author", "author", null, "org:admin", null);
 
         deletePostUseCase.execute(ids, author);
 

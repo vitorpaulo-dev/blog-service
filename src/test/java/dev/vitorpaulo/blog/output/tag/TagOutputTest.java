@@ -1,5 +1,6 @@
 package dev.vitorpaulo.blog.output.tag;
 
+import dev.vitorpaulo.blog.domain.TagEntity;
 import dev.vitorpaulo.blog.model.TagModel;
 import dev.vitorpaulo.blog.output.mapper.TagMapper;
 import dev.vitorpaulo.blog.repository.TagRepository;
@@ -20,32 +21,34 @@ class TagOutputTest {
 
     @Mock private TagRepository tagRepository;
     @Mock private TagMapper tagMapper;
+    @Mock private TagEntity tagEntity;
+    @Mock private TagModel tagModel;
 
     @InjectMocks
     private TagOutput tagOutput;
 
     @Test
-    void shouldReturnEmptyListWhenIdsIsNull() {
+    void findAllById_nullIds_returnsEmptyList() {
         var result = tagOutput.findAllById(null);
         assertTrue(result.isEmpty());
         verifyNoInteractions(tagRepository);
     }
 
     @Test
-    void shouldReturnEmptyListWhenIdsIsEmpty() {
+    void findAllById_emptyIds_returnsEmptyList() {
         var result = tagOutput.findAllById(List.of());
         assertTrue(result.isEmpty());
         verifyNoInteractions(tagRepository);
     }
 
     @Test
-    void shouldReturnTagsWhenFound() {
+    void findAllById_withIds_returnsMappedModels() {
         var id1 = UUID.randomUUID();
         var id2 = UUID.randomUUID();
-        var entity1 = mock(dev.vitorpaulo.blog.domain.TagEntity.class);
-        var entity2 = mock(dev.vitorpaulo.blog.domain.TagEntity.class);
-        var model1 = new TagModel(id1, "slug-1", null);
-        var model2 = new TagModel(id2, "slug-2", null);
+        var entity1 = mock(TagEntity.class);
+        var entity2 = mock(TagEntity.class);
+        var model1 = mock(TagModel.class);
+        var model2 = mock(TagModel.class);
 
         when(tagRepository.findAllById(List.of(id1, id2))).thenReturn(List.of(entity1, entity2));
         when(tagMapper.toModel(entity1)).thenReturn(model1);

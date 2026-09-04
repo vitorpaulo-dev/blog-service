@@ -22,7 +22,7 @@ class GetPostBySlugUseCaseTest {
     private GetPostBySlugUseCase getPostBySlugUseCase;
 
     @Test
-    void shouldReturnPostFilteredByLanguage() {
+    void execute_validSlug_returnsPost() {
         var expected = mock(PostModel.class);
         when(postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH)).thenReturn(expected);
 
@@ -33,7 +33,7 @@ class GetPostBySlugUseCaseTest {
     }
 
     @Test
-    void shouldPropagateNotFound() {
+    void execute_notFound_throwsNotFoundException() {
         when(postOutput.findBySlugAndIncrementView(anyString(), any())).thenThrow(new NotFoundException());
 
         assertThrows(NotFoundException.class,
