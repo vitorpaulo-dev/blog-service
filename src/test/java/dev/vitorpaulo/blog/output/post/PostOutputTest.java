@@ -3,6 +3,7 @@ package dev.vitorpaulo.blog.output.post;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
+import dev.vitorpaulo.blog.domain.AuthorEntity;
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.model.*;
@@ -39,6 +40,11 @@ class PostOutputTest {
     @Mock private AuthorModel author;
     @Mock private PostEntity postEntity;
     @Mock private PostContentEntity postContentEntity;
+    @Mock private PostContentEntity existingContent;
+    @Mock private PostContentModel postContentModel;
+    @Mock private PostModel expectedResult;
+    @Mock private AuthorEntity authorEntity;
+    @Mock private PostQueryModel postQueryModel;
 
     @InjectMocks
     private PostOutput postOutput;
@@ -52,14 +58,13 @@ class PostOutputTest {
     @Test
     void findById_found_returnsPost() {
         var entityId = UUID.randomUUID();
-        var expectedModel = mock(PostModel.class);
 
         when(postRepository.findById(entityId)).thenReturn(Optional.of(postEntity));
-        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedModel);
+        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedResult);
 
         var result = postOutput.findById(entityId);
 
-        assertEquals(expectedModel, result);
+        assertEquals(expectedResult, result);
     }
 
     @Test
@@ -72,18 +77,15 @@ class PostOutputTest {
 
     @Test
     void findBySlugAndIncrementView_found_incrementsViewCount() {
-        var savedEntity = mock(PostEntity.class);
-        var expectedModel = mock(PostModel.class);
-
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getViewCount()).thenReturn(5L);
-        when(postRepository.save(postEntity)).thenReturn(savedEntity);
-        when(postOutputMapper.toModel(savedEntity, Language.ENGLISH)).thenReturn(expectedModel);
+        when(postRepository.save(postEntity)).thenReturn(postEntity);
+        when(postOutputMapper.toModel(postEntity, Language.ENGLISH)).thenReturn(expectedResult);
 
         var result = postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
 
         verify(postEntity).setViewCount(6L);
-        assertEquals(expectedModel, result);
+        assertEquals(expectedResult, result);
         verify(postRepository).save(postEntity);
     }
 
@@ -92,7 +94,7 @@ class PostOutputTest {
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getViewCount()).thenReturn(null);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH))).thenReturn(mock(PostModel.class));
+        when(postOutputMapper.toModel(postEntity, Language.ENGLISH)).thenReturn(expectedResult);
 
         postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
 
@@ -126,17 +128,16 @@ class PostOutputTest {
 
     @Test
     void save_withEnglishTranslation_savesPost() {
-        var contentModel = mock(PostContentModel.class);
-        var translations = Map.of(Language.ENGLISH, contentModel);
+        var translations = Map.of(Language.ENGLISH, postContentModel);
         when(post.translations()).thenReturn(translations);
-        when(contentModel.title()).thenReturn("My Title");
-        when(contentModel.content()).thenReturn("Some content here");
+        when(postContentModel.title()).thenReturn("My Title");
+        when(postContentModel.content()).thenReturn("Some content here");
 
-        when(postOutputMapper.toContentEntity(contentModel)).thenReturn(postContentEntity);
-        when(postOutputMapper.toAuthorEntity(author)).thenReturn(mock(dev.vitorpaulo.blog.domain.AuthorEntity.class));
+        when(postOutputMapper.toContentEntity(postContentModel)).thenReturn(postContentEntity);
+        when(postOutputMapper.toAuthorEntity(author)).thenReturn(authorEntity);
 
         when(postRepository.countBySlugAndIdNot(anyString(), isNull())).thenReturn(0L);
-        when(postOutputMapper.toModel(any(PostEntity.class))).thenReturn(mock(PostModel.class));
+        when(postOutputMapper.toModel(any(PostEntity.class))).thenReturn(expectedResult);
         when(postRepository.save(any(PostEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         postOutput.save(post, null, null, author);
@@ -147,17 +148,16 @@ class PostOutputTest {
 
     @Test
     void save_withConflict_generatesUniqueSlug() {
-        var contentModel = mock(PostContentModel.class);
-        var translations = Map.of(Language.ENGLISH, contentModel);
+        var translations = Map.of(Language.ENGLISH, postContentModel);
         when(post.translations()).thenReturn(translations);
-        when(contentModel.title()).thenReturn("My Title");
-        when(contentModel.content()).thenReturn("Content");
+        when(postContentModel.title()).thenReturn("My Title");
+        when(postContentModel.content()).thenReturn("Content");
 
-        when(postOutputMapper.toContentEntity(contentModel)).thenReturn(postContentEntity);
-        when(postOutputMapper.toAuthorEntity(author)).thenReturn(mock(dev.vitorpaulo.blog.domain.AuthorEntity.class));
+        when(postOutputMapper.toContentEntity(postContentModel)).thenReturn(postContentEntity);
+        when(postOutputMapper.toAuthorEntity(author)).thenReturn(authorEntity);
 
         when(postRepository.countBySlugAndIdNot("my-title", null)).thenReturn(2L);
-        when(postOutputMapper.toModel(any(PostEntity.class))).thenReturn(mock(PostModel.class));
+        when(postOutputMapper.toModel(any(PostEntity.class))).thenReturn(expectedResult);
         when(postRepository.save(any(PostEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         postOutput.save(post, null, null, author);
@@ -176,8 +176,7 @@ class PostOutputTest {
     @Test
     void update_notFound_throwsNotFoundException() {
         var postId = UUID.randomUUID();
-        var contentModel = mock(PostContentModel.class);
-        var translations = Map.of(Language.ENGLISH, contentModel);
+        var translations = Map.of(Language.ENGLISH, postContentModel);
         when(post.translations()).thenReturn(translations);
         when(post.id()).thenReturn(postId);
 
@@ -191,23 +190,21 @@ class PostOutputTest {
     @Test
     void update_existingContent_updatesInPlace() {
         var postId = UUID.randomUUID();
-        var contentModel = mock(PostContentModel.class);
-        var translations = Map.of(Language.ENGLISH, contentModel);
+        var translations = Map.of(Language.ENGLISH, postContentModel);
         when(post.translations()).thenReturn(translations);
         when(post.id()).thenReturn(postId);
-        when(contentModel.title()).thenReturn("New Title");
-        when(contentModel.content()).thenReturn("New Content");
+        when(postContentModel.title()).thenReturn("New Title");
+        when(postContentModel.content()).thenReturn("New Content");
 
-        var existingContent = mock(PostContentEntity.class);
         when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(existingContent.getTitle()).thenReturn("Old Title");
 
-        when(postEntity.getId()).thenReturn(postId);
-        when(postEntity.getContents()).thenReturn(new ArrayList<>(List.of(existingContent)));
+        var contents = new ArrayList<>(List.of(existingContent));
+        when(postEntity.getContents()).thenReturn(contents);
 
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(postEntity)).thenReturn(mock(PostModel.class));
+        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedResult);
 
         postOutput.update(post, null, null, author);
 
@@ -219,26 +216,24 @@ class PostOutputTest {
     @Test
     void update_newLanguage_addsAndRemovesOld() {
         var postId = UUID.randomUUID();
-        var contentModel = mock(PostContentModel.class);
-        var translations = Map.of(Language.PORTUGUESE, contentModel);
+        var translations = Map.of(Language.PORTUGUESE, postContentModel);
         when(post.translations()).thenReturn(translations);
         when(post.id()).thenReturn(postId);
-        when(contentModel.title()).thenReturn("Titulo");
-        when(contentModel.content()).thenReturn("Conteudo");
+        when(postContentModel.title()).thenReturn("Titulo");
+        when(postContentModel.content()).thenReturn("Conteudo");
 
-        var existingContent = mock(PostContentEntity.class);
         when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(existingContent.getTitle()).thenReturn("Old Title");
 
         var contents = new ArrayList<>(List.of(existingContent));
         when(postEntity.getContents()).thenReturn(contents);
 
-        when(postOutputMapper.toContentEntity(contentModel)).thenReturn(postContentEntity);
+        when(postOutputMapper.toContentEntity(postContentModel)).thenReturn(postContentEntity);
         when(postContentEntity.getLanguage()).thenReturn(Language.PORTUGUESE);
 
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(postEntity)).thenReturn(mock(PostModel.class));
+        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedResult);
 
         postOutput.update(post, null, null, author);
 
@@ -250,13 +245,12 @@ class PostOutputTest {
     @Test
     void update_titleChanged_regeneratesSlug() {
         var postId = UUID.randomUUID();
-        var contentModel = mock(PostContentModel.class);
-        var translations = Map.of(Language.ENGLISH, contentModel);
+        var translations = Map.of(Language.ENGLISH, postContentModel);
         when(post.translations()).thenReturn(translations);
         when(post.id()).thenReturn(postId);
-        when(contentModel.title()).thenReturn("Changed Title");
+        when(postContentModel.title()).thenReturn("Changed Title");
+        when(postContentModel.content()).thenReturn("Content");
 
-        var existingContent = mock(PostContentEntity.class);
         when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(existingContent.getTitle()).thenReturn("Original Title");
 
@@ -267,7 +261,7 @@ class PostOutputTest {
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.countBySlugAndIdNot("changed-title", postId)).thenReturn(0L);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(postEntity)).thenReturn(mock(PostModel.class));
+        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedResult);
 
         postOutput.update(post, null, null, author);
 
@@ -277,14 +271,12 @@ class PostOutputTest {
     @Test
     void update_titleSame_keepsSlug() {
         var postId = UUID.randomUUID();
-        var contentModel = mock(PostContentModel.class);
-        var translations = Map.of(Language.ENGLISH, contentModel);
+        var translations = Map.of(Language.ENGLISH, postContentModel);
         when(post.translations()).thenReturn(translations);
         when(post.id()).thenReturn(postId);
-        when(contentModel.title()).thenReturn("Same Title");
-        when(contentModel.content()).thenReturn("New Content");
+        when(postContentModel.title()).thenReturn("Same Title");
+        when(postContentModel.content()).thenReturn("New Content");
 
-        var existingContent = mock(PostContentEntity.class);
         when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(existingContent.getTitle()).thenReturn("Same Title");
 
@@ -293,7 +285,7 @@ class PostOutputTest {
 
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(postEntity)).thenReturn(mock(PostModel.class));
+        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedResult);
 
         postOutput.update(post, null, null, author);
 
@@ -313,29 +305,25 @@ class PostOutputTest {
 
     @Test
     void deleteAll_nonAdmin_passesFalseFlag() {
-        var nonAdmin = mock(AuthorModel.class);
-        when(nonAdmin.id()).thenReturn(UUID.randomUUID());
-        when(nonAdmin.role()).thenReturn("org:member");
         var ids = List.of(UUID.randomUUID());
+        when(author.id()).thenReturn(UUID.randomUUID());
+        when(author.role()).thenReturn("org:member");
 
-        postOutput.deleteAll(ids, nonAdmin);
+        postOutput.deleteAll(ids, author);
 
-        verify(postRepository).deleteByIdWithAuthor(ids, nonAdmin.id(), false);
+        verify(postRepository).deleteByIdWithAuthor(ids, author.id(), false);
     }
 
     @Test
     void search_withLanguage_returnsPaginatedResults() {
-        var entity = mock(PostEntity.class);
-        var model = mock(PostModel.class);
-        Page<PostEntity> page = new PageImpl<>(List.of(entity));
+        Page<PostEntity> page = new PageImpl<>(List.of(postEntity));
 
         when(postRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(entity, Language.ENGLISH)).thenReturn(model);
+        when(postOutputMapper.toModel(postEntity, Language.ENGLISH)).thenReturn(expectedResult);
+        when(postQueryModel.language()).thenReturn(Language.ENGLISH);
 
-        var query = mock(PostQueryModel.class);
-        when(query.language()).thenReturn(Language.ENGLISH);
-        var input = new PaginatedInput<>(query, 0, 10, "createdAt", Sort.Direction.DESC);
+        var input = new PaginatedInput<>(postQueryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
         var result = postOutput.search(input, null);
 
@@ -349,10 +337,9 @@ class PostOutputTest {
 
         when(postRepository.search(any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
+        when(postQueryModel.language()).thenReturn(null);
 
-        var query = mock(PostQueryModel.class);
-        when(query.language()).thenReturn(null);
-        var input = new PaginatedInput<>(query, 0, 10, "createdAt", Sort.Direction.DESC);
+        var input = new PaginatedInput<>(postQueryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
         postOutput.search(input, null);
 
@@ -364,10 +351,9 @@ class PostOutputTest {
         Page<PostEntity> page = new PageImpl<>(List.of());
         when(postRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
+        when(postQueryModel.language()).thenReturn(Language.ENGLISH);
 
-        var query = mock(PostQueryModel.class);
-        when(query.language()).thenReturn(Language.ENGLISH);
-        var input = new PaginatedInput<>(query, 0, 10, "viewCount", Sort.Direction.ASC);
+        var input = new PaginatedInput<>(postQueryModel, 0, 10, "viewCount", Sort.Direction.ASC);
 
         postOutput.search(input, author);
 
@@ -379,10 +365,9 @@ class PostOutputTest {
         Page<PostEntity> page = new PageImpl<>(List.of());
         when(postRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
+        when(postQueryModel.language()).thenReturn(Language.ENGLISH);
 
-        var query = mock(PostQueryModel.class);
-        when(query.language()).thenReturn(Language.ENGLISH);
-        var input = new PaginatedInput<>(query, 0, 10, "unknownField", Sort.Direction.DESC);
+        var input = new PaginatedInput<>(postQueryModel, 0, 10, "unknownField", Sort.Direction.DESC);
 
         postOutput.search(input, author);
 

@@ -6,7 +6,6 @@ import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.input.mapper.PostInputMapper;
 import dev.vitorpaulo.blog.input.request.CreatePostRequest;
 import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
-import dev.vitorpaulo.blog.input.request.PostContentRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
 import dev.vitorpaulo.blog.input.response.PostResponse;
@@ -14,16 +13,13 @@ import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.usecase.post.*;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Sort;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -43,20 +39,26 @@ class PostControllerTest {
     @Mock private AuthorModel author;
     @Mock private PostModel postModel;
     @Mock private PostResponse postResponse;
+    @Mock private CreatePostRequest createRequest;
+    @Mock private UpdatePostRequest updateRequest;
+    @Mock private MassDeleteRequest massDeleteRequest;
+    @Mock private GenericPageableRequest<PostQueryRequest> searchRequest;
+    @Mock private PaginatedInput<PostQueryModel> paginatedInput;
+    @Mock private PaginatedOutput<PostModel> paginatedOutput;
+    @Mock private GenericPageableResponse<PostResponse> pageableResponse;
 
     @InjectMocks
     private PostController postController;
 
     @Test
     void create_validRequest_returnsCreatedResponse() {
-        var request = mock(CreatePostRequest.class);
-        when(request.tagIds()).thenReturn(null);
-        when(request.projectIds()).thenReturn(null);
-        when(postInputMapper.toModel(request)).thenReturn(postModel);
+        when(createRequest.tagIds()).thenReturn(null);
+        when(createRequest.projectIds()).thenReturn(null);
+        when(postInputMapper.toModel(createRequest)).thenReturn(postModel);
         when(createPostUseCase.execute(postModel, null, null, author)).thenReturn(postModel);
         when(postInputMapper.toResponse(postModel)).thenReturn(postResponse);
 
-        var result = postController.create(request, author);
+        var result = postController.create(createRequest, author);
 
         assertEquals(postResponse, result);
         verify(createPostUseCase).execute(postModel, null, null, author);
@@ -65,14 +67,13 @@ class PostControllerTest {
     @Test
     void update_validRequest_returnsUpdatedResponse() {
         var id = UUID.randomUUID();
-        var request = mock(UpdatePostRequest.class);
-        when(request.tagIds()).thenReturn(null);
-        when(request.projectIds()).thenReturn(null);
-        when(postInputMapper.toModel(request, id)).thenReturn(postModel);
+        when(updateRequest.tagIds()).thenReturn(null);
+        when(updateRequest.projectIds()).thenReturn(null);
+        when(postInputMapper.toModel(updateRequest, id)).thenReturn(postModel);
         when(updatePostUseCase.execute(postModel, null, null, author)).thenReturn(postModel);
         when(postInputMapper.toResponse(postModel)).thenReturn(postResponse);
 
-        var result = postController.update(id, request, author);
+        var result = postController.update(id, updateRequest, author);
 
         assertEquals(postResponse, result);
         verify(updatePostUseCase).execute(postModel, null, null, author);
@@ -81,10 +82,9 @@ class PostControllerTest {
     @Test
     void delete_validRequest_delegatesToUseCase() {
         var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
-        var request = mock(MassDeleteRequest.class);
-        when(request.ids()).thenReturn(ids);
+        when(massDeleteRequest.ids()).thenReturn(ids);
 
-        postController.delete(request, author);
+        postController.delete(massDeleteRequest, author);
 
         verify(deletePostUseCase).execute(ids, author);
     }
@@ -120,17 +120,12 @@ class PostControllerTest {
 
     @Test
     void search_validRequest_returnsPaginatedResponse() {
-        var request = mock(GenericPageableRequest.class);
-        var paginatedInput = mock(PaginatedInput.class);
-        var paginatedOutput = new PaginatedOutput<PostModel>(List.of(), 0, 10, 0, 0);
-        var response = mock(GenericPageableResponse.class);
-
-        when(postInputMapper.toPageableInput(request)).thenReturn(paginatedInput);
+        when(postInputMapper.toPageableInput(searchRequest)).thenReturn(paginatedInput);
         when(searchPostUseCase.execute(paginatedInput, author)).thenReturn(paginatedOutput);
-        when(postInputMapper.toPageableResponse(paginatedOutput)).thenReturn(response);
+        when(postInputMapper.toPageableResponse(paginatedOutput)).thenReturn(pageableResponse);
 
-        var result = postController.search(request, author);
+        var result = postController.search(searchRequest, author);
 
-        assertEquals(response, result);
+        assertEquals(pageableResponse, result);
     }
 }

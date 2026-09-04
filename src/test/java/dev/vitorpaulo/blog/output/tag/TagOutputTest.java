@@ -21,8 +21,10 @@ class TagOutputTest {
 
     @Mock private TagRepository tagRepository;
     @Mock private TagMapper tagMapper;
-    @Mock private TagEntity tagEntity;
-    @Mock private TagModel tagModel;
+    @Mock private TagEntity tagEntity1;
+    @Mock private TagEntity tagEntity2;
+    @Mock private TagModel tagModel1;
+    @Mock private TagModel tagModel2;
 
     @InjectMocks
     private TagOutput tagOutput;
@@ -45,19 +47,15 @@ class TagOutputTest {
     void findAllById_withIds_returnsMappedModels() {
         var id1 = UUID.randomUUID();
         var id2 = UUID.randomUUID();
-        var entity1 = mock(TagEntity.class);
-        var entity2 = mock(TagEntity.class);
-        var model1 = mock(TagModel.class);
-        var model2 = mock(TagModel.class);
 
-        when(tagRepository.findAllById(List.of(id1, id2))).thenReturn(List.of(entity1, entity2));
-        when(tagMapper.toModel(entity1)).thenReturn(model1);
-        when(tagMapper.toModel(entity2)).thenReturn(model2);
+        when(tagRepository.findAllById(List.of(id1, id2))).thenReturn(List.of(tagEntity1, tagEntity2));
+        when(tagMapper.toModel(tagEntity1)).thenReturn(tagModel1);
+        when(tagMapper.toModel(tagEntity2)).thenReturn(tagModel2);
 
         var result = tagOutput.findAllById(List.of(id1, id2));
 
         assertEquals(2, result.size());
-        assertEquals(model1, result.get(0));
-        assertEquals(model2, result.get(1));
+        assertEquals(tagModel1, result.get(0));
+        assertEquals(tagModel2, result.get(1));
     }
 }

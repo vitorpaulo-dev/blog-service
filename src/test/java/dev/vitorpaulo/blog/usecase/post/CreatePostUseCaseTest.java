@@ -27,6 +27,7 @@ class CreatePostUseCaseTest {
     @Mock private AuthorModel author;
     @Mock private TagModel tag;
     @Mock private ProjectModel project;
+    @Mock private PostModel savedPost;
 
     @InjectMocks
     private CreatePostUseCase createPostUseCase;
@@ -42,8 +43,6 @@ class CreatePostUseCaseTest {
 
     @Test
     void execute_withTagsAndProjects_returnsSavedPost() {
-        var savedPost = mock(PostModel.class);
-
         when(tagOutput.findAllById(List.of(tagId))).thenReturn(List.of(tag));
         when(projectOutput.findAllById(List.of(projectId))).thenReturn(List.of(project));
         when(postOutput.save(post, List.of(tag), List.of(project), author)).thenReturn(savedPost);
@@ -58,8 +57,6 @@ class CreatePostUseCaseTest {
 
     @Test
     void execute_withoutTagsOrProjects_returnsSavedPost() {
-        var savedPost = mock(PostModel.class);
-
         when(tagOutput.findAllById(null)).thenReturn(List.of());
         when(projectOutput.findAllById(null)).thenReturn(List.of());
         when(postOutput.save(post, List.of(), List.of(), author)).thenReturn(savedPost);

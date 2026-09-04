@@ -21,8 +21,10 @@ class ProjectOutputTest {
 
     @Mock private ProjectRepository projectRepository;
     @Mock private ProjectMapper projectMapper;
-    @Mock private ProjectEntity projectEntity;
-    @Mock private ProjectModel projectModel;
+    @Mock private ProjectEntity projectEntity1;
+    @Mock private ProjectEntity projectEntity2;
+    @Mock private ProjectModel projectModel1;
+    @Mock private ProjectModel projectModel2;
 
     @InjectMocks
     private ProjectOutput projectOutput;
@@ -45,19 +47,15 @@ class ProjectOutputTest {
     void findAllById_withIds_returnsMappedModels() {
         var id1 = UUID.randomUUID();
         var id2 = UUID.randomUUID();
-        var entity1 = mock(ProjectEntity.class);
-        var entity2 = mock(ProjectEntity.class);
-        var model1 = mock(ProjectModel.class);
-        var model2 = mock(ProjectModel.class);
 
-        when(projectRepository.findAllById(List.of(id1, id2))).thenReturn(List.of(entity1, entity2));
-        when(projectMapper.toModel(entity1)).thenReturn(model1);
-        when(projectMapper.toModel(entity2)).thenReturn(model2);
+        when(projectRepository.findAllById(List.of(id1, id2))).thenReturn(List.of(projectEntity1, projectEntity2));
+        when(projectMapper.toModel(projectEntity1)).thenReturn(projectModel1);
+        when(projectMapper.toModel(projectEntity2)).thenReturn(projectModel2);
 
         var result = projectOutput.findAllById(List.of(id1, id2));
 
         assertEquals(2, result.size());
-        assertEquals(model1, result.get(0));
-        assertEquals(model2, result.get(1));
+        assertEquals(projectModel1, result.get(0));
+        assertEquals(projectModel2, result.get(1));
     }
 }

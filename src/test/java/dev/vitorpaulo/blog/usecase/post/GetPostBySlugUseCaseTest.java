@@ -17,13 +17,13 @@ import static org.mockito.Mockito.*;
 class GetPostBySlugUseCaseTest {
 
     @Mock private PostOutput postOutput;
+    @Mock private PostModel expected;
 
     @InjectMocks
     private GetPostBySlugUseCase getPostBySlugUseCase;
 
     @Test
     void execute_validSlug_returnsPost() {
-        var expected = mock(PostModel.class);
         when(postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH)).thenReturn(expected);
 
         var result = getPostBySlugUseCase.execute("my-post", Language.ENGLISH);

@@ -27,6 +27,7 @@ class UpdatePostUseCaseTest {
     @Mock private AuthorModel author;
     @Mock private TagModel tag;
     @Mock private ProjectModel project;
+    @Mock private PostModel updatedPost;
 
     @InjectMocks
     private UpdatePostUseCase updatePostUseCase;
@@ -42,8 +43,6 @@ class UpdatePostUseCaseTest {
 
     @Test
     void execute_withTagsAndProjects_returnsUpdatedPost() {
-        var updatedPost = mock(PostModel.class);
-
         when(tagOutput.findAllById(List.of(tagId))).thenReturn(List.of(tag));
         when(projectOutput.findAllById(List.of(projectId))).thenReturn(List.of(project));
         when(postOutput.update(post, List.of(tag), List.of(project), author)).thenReturn(updatedPost);
@@ -56,8 +55,6 @@ class UpdatePostUseCaseTest {
 
     @Test
     void execute_withoutTagsOrProjects_returnsUpdatedPost() {
-        var updatedPost = mock(PostModel.class);
-
         when(tagOutput.findAllById(null)).thenReturn(List.of());
         when(projectOutput.findAllById(null)).thenReturn(List.of());
         when(postOutput.update(post, List.of(), List.of(), author)).thenReturn(updatedPost);

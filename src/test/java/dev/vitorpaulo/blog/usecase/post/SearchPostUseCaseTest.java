@@ -14,7 +14,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Sort;
 
 import java.util.List;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -24,15 +23,15 @@ class SearchPostUseCaseTest {
 
     @Mock private PostOutput postOutput;
     @Mock private AuthorModel author;
+    @Mock private PostQueryModel query;
+    @Mock private PaginatedOutput<PostModel> expected;
 
     @InjectMocks
     private SearchPostUseCase searchPostUseCase;
 
     @Test
     void execute_withQuery_returnsPaginatedResults() {
-        var query = mock(PostQueryModel.class);
         var input = new PaginatedInput<>(query, 0, 10, "createdAt", Sort.Direction.DESC);
-        var expected = new PaginatedOutput<PostModel>(List.of(), 0, 10, 0, 0);
 
         when(postOutput.search(input, author)).thenReturn(expected);
 

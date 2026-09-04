@@ -18,6 +18,7 @@ import static org.mockito.Mockito.*;
 class GetPostByIdUseCaseTest {
 
     @Mock private PostOutput postOutput;
+    @Mock private PostModel expected;
 
     @InjectMocks
     private GetPostByIdUseCase getPostByIdUseCase;
@@ -25,7 +26,6 @@ class GetPostByIdUseCaseTest {
     @Test
     void execute_found_returnsPost() {
         var id = UUID.randomUUID();
-        var expected = mock(PostModel.class);
         when(postOutput.findById(id)).thenReturn(expected);
 
         var result = getPostByIdUseCase.execute(id);
