@@ -32,6 +32,46 @@ public interface ProjectMapper {
         ));
     }
 
+    default ProjectModel toModel(ProjectEntity entity, Language language) {
+        ProjectModel model = toModel(entity);
+        if (model == null || language == null) return model;
+        return filterModelByLanguage(model, language);
+    }
+
+    private ProjectModel filterModelByLanguage(ProjectModel model, Language language) {
+        var filteredTranslations = filterTranslations(model.translations(), language);
+        var filteredTags = model.tags() == null ? List.<TagModel>of() :
+            model.tags().stream()
+                .map(t -> filterTagModel(t, language))
+                .toList();
+
+        return new ProjectModel(
+            model.id(), model.slug(), model.logoUrl(), model.bannerUrl(),
+            model.githubUrl(), model.websiteUrl(), model.status(),
+            model.createdAt(), model.updatedAt(), model.authors(), filteredTags,
+            model.viewCount(), model.loveCount(), model.celebrateCount(),
+            model.geniusCount(), model.helpCount(), model.reactionCount(), filteredTranslations
+        );
+    }
+
+    static Map<Language, ProjectContentModel> filterTranslations(Map<Language, ProjectContentModel> translations, Language requested) {
+        if (translations == null || translations.isEmpty()) return Map.of();
+        if (translations.containsKey(requested)) return Map.of(requested, translations.get(requested));
+        if (translations.containsKey(Language.ENGLISH)) return Map.of(Language.ENGLISH, translations.get(Language.ENGLISH));
+        return translations.entrySet().stream().findFirst()
+            .map(e -> Map.of(e.getKey(), e.getValue())).orElse(Map.of());
+    }
+
+    private TagModel filterTagModel(TagModel tag, Language language) {
+        if (tag == null || tag.translations() == null || tag.translations().isEmpty()) return tag;
+        var translations = tag.translations();
+        if (translations.containsKey(language)) return new TagModel(tag.id(), tag.slug(), Map.of(language, translations.get(language)));
+        if (translations.containsKey(Language.ENGLISH)) return new TagModel(tag.id(), tag.slug(), Map.of(Language.ENGLISH, translations.get(Language.ENGLISH)));
+        return translations.entrySet().stream().findFirst()
+            .map(e -> new TagModel(tag.id(), tag.slug(), Map.of(e.getKey(), e.getValue())))
+            .orElse(tag);
+    }
+
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "slug", ignore = true)
     @Mapping(target = "contents", ignore = true)

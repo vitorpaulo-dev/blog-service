@@ -48,7 +48,7 @@ public class ProjectEntity {
     @Column(name = "status", nullable = false)
     private ProjectStatus status = ProjectStatus.DRAFT;
 
-    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = 50)
     @Builder.Default
     private List<ProjectContentEntity> contents = new ArrayList<>();

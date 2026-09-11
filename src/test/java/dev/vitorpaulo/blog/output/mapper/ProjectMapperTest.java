@@ -186,4 +186,74 @@ class ProjectMapperTest {
         assertEquals(1, result.size());
         assertEquals("Title", result.get(Language.ENGLISH).title());
     }
+
+    @Test
+    void toModel_withLanguage_filtersToRequestedLanguage() {
+        var enContent = new ProjectContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setDescription("English Desc");
+
+        var ptContent = new ProjectContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setDescription("Descricao");
+
+        var entity = ProjectEntity.builder()
+            .id(UUID.randomUUID())
+            .slug("slug")
+            .contents(new ArrayList<>(List.of(enContent, ptContent)))
+            .status(ProjectStatus.DRAFT)
+            .build();
+
+        var result = mapper.toModel(entity, Language.PORTUGUESE);
+
+        assertEquals(1, result.translations().size());
+        assertTrue(result.translations().containsKey(Language.PORTUGUESE));
+        assertEquals("Titulo", result.translations().get(Language.PORTUGUESE).title());
+    }
+
+    @Test
+    void toModel_withLanguage_fallsBackToEnglish() {
+        var enContent = new ProjectContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setDescription("English Desc");
+
+        var entity = ProjectEntity.builder()
+            .id(UUID.randomUUID())
+            .slug("slug")
+            .contents(new ArrayList<>(List.of(enContent)))
+            .status(ProjectStatus.DRAFT)
+            .build();
+
+        var result = mapper.toModel(entity, Language.PORTUGUESE);
+
+        assertEquals(1, result.translations().size());
+        assertTrue(result.translations().containsKey(Language.ENGLISH));
+    }
+
+    @Test
+    void toModel_withNullLanguage_returnsAllTranslations() {
+        var enContent = new ProjectContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setDescription("English Desc");
+
+        var ptContent = new ProjectContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setDescription("Descricao");
+
+        var entity = ProjectEntity.builder()
+            .id(UUID.randomUUID())
+            .slug("slug")
+            .contents(new ArrayList<>(List.of(enContent, ptContent)))
+            .status(ProjectStatus.DRAFT)
+            .build();
+
+        var result = mapper.toModel(entity, null);
+
+        assertEquals(2, result.translations().size());
+    }
 }

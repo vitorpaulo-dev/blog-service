@@ -7,172 +7,65 @@ import dev.vitorpaulo.blog.input.request.PostContentRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
 import dev.vitorpaulo.blog.input.response.AuthorContentResponse;
+import dev.vitorpaulo.blog.input.response.AuthorResponse;
 import dev.vitorpaulo.blog.input.response.PostContentResponse;
 import dev.vitorpaulo.blog.input.response.PostResponse;
 import dev.vitorpaulo.blog.input.response.ProjectContentResponse;
+import dev.vitorpaulo.blog.input.response.ProjectResponse;
 import dev.vitorpaulo.blog.input.response.TagContentResponse;
+import dev.vitorpaulo.blog.input.response.TagResponse;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import jakarta.validation.Valid;
+import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.NullValueMappingStrategy;
+import org.mapstruct.NullValuePropertyMappingStrategy;
 
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring")
 public interface PostInputMapper {
 
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "slug", ignore = true)
-    @Mapping(target = "estimatedReading", ignore = true)
-    @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "authors", ignore = true)
-    @Mapping(target = "tags", ignore = true)
-    @Mapping(target = "projectIds", ignore = true)
-    @Mapping(target = "viewCount", ignore = true)
-    @Mapping(target = "loveCount", ignore = true)
-    @Mapping(target = "celebrateCount", ignore = true)
-    @Mapping(target = "geniusCount", ignore = true)
-    @Mapping(target = "helpCount", ignore = true)
-    @Mapping(target = "reactionCount", ignore = true)
-    PostModel toModel(CreatePostRequest request);
+	@Mapping(target = "id", ignore = true)
+	@Mapping(target = "slug", ignore = true)
+	@Mapping(target = "estimatedReading", ignore = true)
+	@Mapping(target = "createdAt", ignore = true)
+	@Mapping(target = "updatedAt", ignore = true)
+	@Mapping(target = "authors", ignore = true)
+	@Mapping(target = "tags", ignore = true)
+	@Mapping(target = "projectIds", ignore = true)
+	@Mapping(target = "viewCount", ignore = true)
+	@Mapping(target = "loveCount", ignore = true)
+	@Mapping(target = "celebrateCount", ignore = true)
+	@Mapping(target = "geniusCount", ignore = true)
+	@Mapping(target = "helpCount", ignore = true)
+	@Mapping(target = "reactionCount", ignore = true)
+	PostModel toModel(CreatePostRequest request);
 
-    @Mapping(target = "id", source = "id")
-    @Mapping(target = "slug", ignore = true)
-    @Mapping(target = "estimatedReading", ignore = true)
-    @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "authors", ignore = true)
-    @Mapping(target = "tags", ignore = true)
-    @Mapping(target = "projectIds", ignore = true)
-    @Mapping(target = "viewCount", ignore = true)
-    @Mapping(target = "loveCount", ignore = true)
-    @Mapping(target = "celebrateCount", ignore = true)
-    @Mapping(target = "geniusCount", ignore = true)
-    @Mapping(target = "helpCount", ignore = true)
-    @Mapping(target = "reactionCount", ignore = true)
-    PostModel toModel(UpdatePostRequest request, UUID id);
+	@Mapping(target = "id", source = "id")
+	@Mapping(target = "slug", ignore = true)
+	@Mapping(target = "estimatedReading", ignore = true)
+	@Mapping(target = "createdAt", ignore = true)
+	@Mapping(target = "updatedAt", ignore = true)
+	@Mapping(target = "authors", ignore = true)
+	@Mapping(target = "tags", ignore = true)
+	@Mapping(target = "projectIds", ignore = true)
+	@Mapping(target = "viewCount", ignore = true)
+	@Mapping(target = "loveCount", ignore = true)
+	@Mapping(target = "celebrateCount", ignore = true)
+	@Mapping(target = "geniusCount", ignore = true)
+	@Mapping(target = "helpCount", ignore = true)
+	@Mapping(target = "reactionCount", ignore = true)
+	PostModel toModel(UpdatePostRequest request, UUID id);
 
-    PostContentModel toContentModel(PostContentRequest request);
+	PostContentModel toContentModel(PostContentRequest request);
 
-    default PostResponse toResponse(PostModel post) {
-        if (post == null) return null;
-        return new PostResponse(
-            post.id(),
-            post.slug(),
-            post.bannerUrl(),
-            post.status() != null ? post.status().name() : null,
-            post.estimatedReading(),
-            post.createdAt(),
-            post.updatedAt(),
-            post.authors() != null ? post.authors().stream().map(this::toAuthorResponse).toList() : List.of(),
-            post.tags() != null ? post.tags().stream().map(this::toTagResponse).toList() : List.of(),
-            post.projectIds() != null ? post.projectIds() : List.of(),
-            post.viewCount(),
-            post.loveCount(),
-            post.celebrateCount(),
-            post.geniusCount(),
-            post.helpCount(),
-            post.reactionCount(),
-            toContentResponseMap(post.translations())
-        );
-    }
+	PostResponse toResponse(PostModel post);
 
-    default PostContentResponse toContentResponse(PostContentModel model) {
-        if (model == null) return null;
-        return new PostContentResponse(model.title(), model.content());
-    }
+	GenericPageableResponse<PostResponse> toPageableResponse(PaginatedOutput<PostModel> result);
 
-    default Map<Language, PostContentResponse> toContentResponseMap(Map<Language, PostContentModel> translations) {
-        if (translations == null) return Map.of();
-        return translations.entrySet().stream().collect(Collectors.toMap(
-            Map.Entry::getKey,
-            e -> toContentResponse(e.getValue())
-        ));
-    }
-
-    default dev.vitorpaulo.blog.input.response.AuthorResponse toAuthorResponse(AuthorModel model) {
-        if (model == null) return null;
-        final var contentMap = model.translations() != null
-            ? model.translations().entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey,
-                e -> new AuthorContentResponse(e.getValue().bio(), e.getValue().jobTitle())
-            ))
-            : Map.<Language, AuthorContentResponse>of();
-        return new dev.vitorpaulo.blog.input.response.AuthorResponse(
-            model.id(), model.slug(), model.name(), model.avatarUrl(), contentMap
-        );
-    }
-
-    default dev.vitorpaulo.blog.input.response.TagResponse toTagResponse(TagModel model) {
-        if (model == null) return null;
-        final var contentMap = model.translations() != null
-            ? model.translations().entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey,
-                e -> new TagContentResponse(e.getValue().name())
-            ))
-            : Map.<Language, TagContentResponse>of();
-        return new dev.vitorpaulo.blog.input.response.TagResponse(model.id(), model.slug(), contentMap);
-    }
-
-    default dev.vitorpaulo.blog.input.response.ProjectResponse toProjectResponse(ProjectModel model) {
-        if (model == null) return null;
-        final var contentMap = model.translations() != null
-            ? model.translations().entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey,
-                e -> new ProjectContentResponse(e.getValue().title(), e.getValue().description())
-            ))
-            : Map.<Language, ProjectContentResponse>of();
-        return new dev.vitorpaulo.blog.input.response.ProjectResponse(
-            model.id(),
-            model.slug(),
-            model.logoUrl(),
-            model.bannerUrl(),
-            model.githubUrl(),
-            model.websiteUrl(),
-            model.status() != null ? model.status().name() : null,
-            model.createdAt(),
-            model.updatedAt(),
-            model.authors() != null ? model.authors().stream().map(this::toAuthorResponse).toList() : List.of(),
-            model.tags() != null ? model.tags().stream().map(this::toTagResponse).toList() : List.of(),
-            model.viewCount(),
-            model.loveCount(),
-            model.celebrateCount(),
-            model.geniusCount(),
-            model.helpCount(),
-            model.reactionCount(),
-            contentMap
-        );
-    }
-
-    default GenericPageableResponse<PostResponse> toPageableResponse(PaginatedOutput<PostModel> result) {
-        if (result == null) return null;
-        return new GenericPageableResponse<>(
-            result.content().stream().map(this::toResponse).toList(),
-            result.page(),
-            result.size(),
-            result.totalPages(),
-            result.totalElements()
-        );
-    }
-
-    default PaginatedInput<PostQueryModel> toPageableInput(@Valid GenericPageableRequest<PostQueryRequest> request) {
-        if (request == null) return null;
-        final var query = request.query();
-        final var queryModel = query != null
-            ? new PostQueryModel(query.query(), query.authorId(), query.language(), query.tagId())
-            : new PostQueryModel(null, null, null, null);
-        return new PaginatedInput<>(
-            queryModel,
-            request.page() != null ? request.page() : 0,
-            request.size() != null ? request.size() : 10,
-            request.sort(),
-            request.direction()
-        );
-    }
+	PaginatedInput<PostQueryModel> toPageableInput(GenericPageableRequest<PostQueryRequest> request);
 }

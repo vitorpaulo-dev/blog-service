@@ -42,7 +42,7 @@ public class PostEntity {
     @Column(name = "estimated_reading")
     private Long estimatedReading;
 
-    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = 50)
     @Builder.Default
     private List<PostContentEntity> contents = new ArrayList<>();

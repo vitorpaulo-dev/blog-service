@@ -15,131 +15,50 @@ import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import jakarta.validation.Valid;
+import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.NullValueMappingStrategy;
+import org.mapstruct.NullValuePropertyMappingStrategy;
 
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring")
 public interface ProjectInputMapper {
 
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "slug", ignore = true)
-    @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "authors", ignore = true)
-    @Mapping(target = "tags", ignore = true)
-    @Mapping(target = "viewCount", ignore = true)
-    @Mapping(target = "loveCount", ignore = true)
-    @Mapping(target = "celebrateCount", ignore = true)
-    @Mapping(target = "geniusCount", ignore = true)
-    @Mapping(target = "helpCount", ignore = true)
-    @Mapping(target = "reactionCount", ignore = true)
-    ProjectModel toModel(CreateProjectRequest request);
+	@Mapping(target = "id", ignore = true)
+	@Mapping(target = "slug", ignore = true)
+	@Mapping(target = "createdAt", ignore = true)
+	@Mapping(target = "updatedAt", ignore = true)
+	@Mapping(target = "authors", ignore = true)
+	@Mapping(target = "tags", ignore = true)
+	@Mapping(target = "viewCount", ignore = true)
+	@Mapping(target = "loveCount", ignore = true)
+	@Mapping(target = "celebrateCount", ignore = true)
+	@Mapping(target = "geniusCount", ignore = true)
+	@Mapping(target = "helpCount", ignore = true)
+	@Mapping(target = "reactionCount", ignore = true)
+	ProjectModel toModel(CreateProjectRequest request);
 
-    @Mapping(target = "id", source = "id")
-    @Mapping(target = "slug", ignore = true)
-    @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "authors", ignore = true)
-    @Mapping(target = "tags", ignore = true)
-    @Mapping(target = "viewCount", ignore = true)
-    @Mapping(target = "loveCount", ignore = true)
-    @Mapping(target = "celebrateCount", ignore = true)
-    @Mapping(target = "geniusCount", ignore = true)
-    @Mapping(target = "helpCount", ignore = true)
-    @Mapping(target = "reactionCount", ignore = true)
-    ProjectModel toModel(UpdateProjectRequest request, UUID id);
+	@Mapping(target = "id", source = "id")
+	@Mapping(target = "slug", ignore = true)
+	@Mapping(target = "createdAt", ignore = true)
+	@Mapping(target = "updatedAt", ignore = true)
+	@Mapping(target = "authors", ignore = true)
+	@Mapping(target = "tags", ignore = true)
+	@Mapping(target = "viewCount", ignore = true)
+	@Mapping(target = "loveCount", ignore = true)
+	@Mapping(target = "celebrateCount", ignore = true)
+	@Mapping(target = "geniusCount", ignore = true)
+	@Mapping(target = "helpCount", ignore = true)
+	@Mapping(target = "reactionCount", ignore = true)
+	ProjectModel toModel(UpdateProjectRequest request, UUID id);
 
-    ProjectContentModel toContentModel(ProjectContentRequest request);
+	ProjectContentModel toContentModel(ProjectContentRequest request);
 
-    default ProjectResponse toResponse(ProjectModel project) {
-        if (project == null) return null;
-        return new ProjectResponse(
-            project.id(),
-            project.slug(),
-            project.logoUrl(),
-            project.bannerUrl(),
-            project.githubUrl(),
-            project.websiteUrl(),
-            project.status() != null ? project.status().name() : null,
-            project.createdAt(),
-            project.updatedAt(),
-            project.authors() != null ? project.authors().stream().map(this::toAuthorResponse).toList() : List.of(),
-            project.tags() != null ? project.tags().stream().map(this::toTagResponse).toList() : List.of(),
-            project.viewCount(),
-            project.loveCount(),
-            project.celebrateCount(),
-            project.geniusCount(),
-            project.helpCount(),
-            project.reactionCount(),
-            toContentResponseMap(project.translations())
-        );
-    }
+	ProjectResponse toResponse(ProjectModel project);
 
-    default ProjectContentResponse toContentResponse(ProjectContentModel model) {
-        if (model == null) return null;
-        return new ProjectContentResponse(model.title(), model.description());
-    }
+	GenericPageableResponse<ProjectResponse> toPageableResponse(PaginatedOutput<ProjectModel> result);
 
-    default Map<Language, ProjectContentResponse> toContentResponseMap(Map<Language, ProjectContentModel> translations) {
-        if (translations == null) return Map.of();
-        return translations.entrySet().stream().collect(Collectors.toMap(
-            Map.Entry::getKey,
-            e -> toContentResponse(e.getValue())
-        ));
-    }
-
-    default dev.vitorpaulo.blog.input.response.AuthorResponse toAuthorResponse(AuthorModel model) {
-        if (model == null) return null;
-        final var contentMap = model.translations() != null
-            ? model.translations().entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey,
-                e -> new AuthorContentResponse(e.getValue().bio(), e.getValue().jobTitle())
-            ))
-            : Map.<Language, AuthorContentResponse>of();
-        return new dev.vitorpaulo.blog.input.response.AuthorResponse(
-            model.id(), model.slug(), model.name(), model.avatarUrl(), contentMap
-        );
-    }
-
-    default TagResponse toTagResponse(TagModel model) {
-        if (model == null) return null;
-        final var contentMap = model.translations() != null
-            ? model.translations().entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey,
-                e -> new TagContentResponse(e.getValue().name())
-            ))
-            : Map.<Language, TagContentResponse>of();
-        return new TagResponse(model.id(), model.slug(), contentMap);
-    }
-
-    default GenericPageableResponse<ProjectResponse> toPageableResponse(PaginatedOutput<ProjectModel> result) {
-        if (result == null) return null;
-        return new GenericPageableResponse<>(
-            result.content().stream().map(this::toResponse).toList(),
-            result.page(),
-            result.size(),
-            result.totalPages(),
-            result.totalElements()
-        );
-    }
-
-    default PaginatedInput<ProjectQueryModel> toPageableInput(@Valid GenericPageableRequest<ProjectQueryRequest> request) {
-        if (request == null) return null;
-        final var query = request.query();
-        final var queryModel = query != null
-            ? new ProjectQueryModel(query.query(), query.authorId(), query.language(), query.tagId())
-            : new ProjectQueryModel(null, null, null, null);
-        return new PaginatedInput<>(
-            queryModel,
-            request.page() != null ? request.page() : 0,
-            request.size() != null ? request.size() : 10,
-            request.sort(),
-            request.direction()
-        );
-    }
+	PaginatedInput<ProjectQueryModel> toPageableInput(GenericPageableRequest<ProjectQueryRequest> request);
 }

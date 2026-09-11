@@ -47,9 +47,7 @@ public class ProjectOutput {
 		entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
 
 		final var saved = projectRepository.save(entity);
-		filterContents(saved, language);
-		filterTagContents(saved, language);
-		return projectMapper.toModel(saved);
+		return projectMapper.toModel(saved, language);
 	}
 
 	@Transactional
@@ -110,9 +108,7 @@ public class ProjectOutput {
 			);
 
 		final var content = page.getContent().stream()
-			.peek(entity -> filterContents(entity, language))
-			.peek(entity -> filterTagContents(entity, language))
-			.map(projectMapper::toModel)
+			.map(entity -> projectMapper.toModel(entity, language))
 			.toList();
 
 		return new PaginatedOutput<>(
@@ -134,9 +130,7 @@ public class ProjectOutput {
 	public List<ProjectModel> findAllById(List<UUID> ids, Language language) {
 		if (ids == null || ids.isEmpty()) return List.of();
 		return projectRepository.findAllById(ids).stream()
-			.peek(entity -> filterContents(entity, language))
-			.peek(entity -> filterTagContents(entity, language))
-			.map(projectMapper::toModel)
+			.map(entity -> projectMapper.toModel(entity, language))
 			.toList();
 	}
 
@@ -200,32 +194,5 @@ public class ProjectOutput {
 			case "reactionCount" -> "reaction_count " + dir;
 			default -> "created_at " + dir + ", updated_at " + dir;
 		};
-	}
-
-	private void filterContents(ProjectEntity entity, Language language) {
-		if (language == null || entity.getContents().size() <= 1) return;
-		final var filtered = entity.getContents().stream()
-			.filter(c -> c.getLanguage().equals(language))
-			.findFirst()
-			.or(() -> entity.getContents().stream()
-				.filter(c -> c.getLanguage() == Language.ENGLISH)
-				.findFirst())
-			.or(() -> entity.getContents().stream().findFirst());
-		entity.setContents(filtered.map(List::of).orElse(List.of()));
-	}
-
-	private void filterTagContents(ProjectEntity entity, Language language) {
-		if (language == null || entity.getTags() == null) return;
-		entity.getTags().forEach(tag -> {
-			if (tag.getContents().size() <= 1) return;
-			final var filtered = tag.getContents().stream()
-				.filter(c -> c.getLanguage().equals(language))
-				.findFirst()
-				.or(() -> tag.getContents().stream()
-					.filter(c -> c.getLanguage() == Language.ENGLISH)
-					.findFirst())
-				.or(() -> tag.getContents().stream().findFirst());
-			tag.setContents(filtered.map(List::of).orElse(List.of()));
-		});
 	}
 }

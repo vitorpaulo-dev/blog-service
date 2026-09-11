@@ -75,7 +75,7 @@ class ProjectOutputTest {
         when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
         when(projectEntity.getViewCount()).thenReturn(5L);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
+        when(projectMapper.toModel(projectEntity, Language.ENGLISH)).thenReturn(expectedResult);
 
         var result = projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH);
 
@@ -89,7 +89,7 @@ class ProjectOutputTest {
         when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
         when(projectEntity.getViewCount()).thenReturn(null);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
+        when(projectMapper.toModel(projectEntity, Language.ENGLISH)).thenReturn(expectedResult);
 
         projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH);
 
@@ -386,7 +386,7 @@ class ProjectOutputTest {
 
         when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(projectMapper.toModel(eq(projectEntity))).thenReturn(expectedResult);
+        when(projectMapper.toModel(eq(projectEntity), eq(Language.ENGLISH))).thenReturn(expectedResult);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(Language.ENGLISH);
@@ -490,7 +490,7 @@ class ProjectOutputTest {
     void findAllById_withIds_returnsMappedResults() {
         var ids = List.of(UUID.randomUUID());
         when(projectRepository.findAllById(ids)).thenReturn(List.of(projectEntity));
-        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
+        when(projectMapper.toModel(eq(projectEntity), eq(Language.ENGLISH))).thenReturn(expectedResult);
 
         var result = projectOutput.findAllById(ids, Language.ENGLISH);
 
@@ -550,7 +550,7 @@ class ProjectOutputTest {
         Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
         when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+        when(projectMapper.toModel(any(ProjectEntity.class), eq(Language.PORTUGUESE))).thenReturn(expectedResult);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(Language.PORTUGUESE);
@@ -558,13 +558,10 @@ class ProjectOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        projectOutput.search(input, null);
+        var result = projectOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
-        verify(projectMapper).toModel(captor.capture());
-        var filtered = captor.getValue();
-        assertEquals(1, filtered.getContents().size());
-        assertEquals(Language.PORTUGUESE, filtered.getContents().getFirst().getLanguage());
+        assertNotNull(result);
+        verify(projectMapper).toModel(any(ProjectEntity.class), eq(Language.PORTUGUESE));
     }
 
     @Test
@@ -581,7 +578,7 @@ class ProjectOutputTest {
         Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
         when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+        when(projectMapper.toModel(any(ProjectEntity.class), eq(Language.PORTUGUESE))).thenReturn(expectedResult);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(Language.PORTUGUESE);
@@ -589,13 +586,10 @@ class ProjectOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        projectOutput.search(input, null);
+        var result = projectOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
-        verify(projectMapper).toModel(captor.capture());
-        var filtered = captor.getValue();
-        assertEquals(1, filtered.getContents().size());
-        assertEquals(Language.ENGLISH, filtered.getContents().getFirst().getLanguage());
+        assertNotNull(result);
+        verify(projectMapper).toModel(any(ProjectEntity.class), eq(Language.PORTUGUESE));
     }
 
     @Test
@@ -612,7 +606,7 @@ class ProjectOutputTest {
         Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
         when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+        when(projectMapper.toModel(any(ProjectEntity.class), eq(Language.ENGLISH))).thenReturn(expectedResult);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(Language.ENGLISH);
@@ -620,13 +614,10 @@ class ProjectOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        projectOutput.search(input, null);
+        var result = projectOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
-        verify(projectMapper).toModel(captor.capture());
-        var filtered = captor.getValue();
-        assertEquals(1, filtered.getContents().size());
-        assertEquals(Language.PORTUGUESE, filtered.getContents().getFirst().getLanguage());
+        assertNotNull(result);
+        verify(projectMapper).toModel(any(ProjectEntity.class), eq(Language.ENGLISH));
     }
 
     @Test
@@ -648,7 +639,7 @@ class ProjectOutputTest {
         Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
         when(projectRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+        when(projectMapper.toModel(any(ProjectEntity.class), isNull())).thenReturn(expectedResult);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(null);
@@ -656,12 +647,10 @@ class ProjectOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        projectOutput.search(input, null);
+        var result = projectOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
-        verify(projectMapper).toModel(captor.capture());
-        var filtered = captor.getValue();
-        assertEquals(2, filtered.getContents().size());
+        assertNotNull(result);
+        verify(projectMapper).toModel(any(ProjectEntity.class), isNull());
     }
 
     @Test
@@ -689,7 +678,7 @@ class ProjectOutputTest {
         Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
         when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+        when(projectMapper.toModel(any(ProjectEntity.class), eq(Language.PORTUGUESE))).thenReturn(expectedResult);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(Language.PORTUGUESE);
@@ -697,13 +686,10 @@ class ProjectOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        projectOutput.search(input, null);
+        var result = projectOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
-        verify(projectMapper).toModel(captor.capture());
-        var filteredTag = captor.getValue().getTags().getFirst();
-        assertEquals(1, filteredTag.getContents().size());
-        assertEquals(Language.PORTUGUESE, filteredTag.getContents().getFirst().getLanguage());
+        assertNotNull(result);
+        verify(projectMapper).toModel(any(ProjectEntity.class), eq(Language.PORTUGUESE));
     }
 
     @Test
@@ -731,7 +717,7 @@ class ProjectOutputTest {
         Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
         when(projectRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+        when(projectMapper.toModel(any(ProjectEntity.class), isNull())).thenReturn(expectedResult);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(null);
@@ -739,12 +725,10 @@ class ProjectOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        projectOutput.search(input, null);
+        var result = projectOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
-        verify(projectMapper).toModel(captor.capture());
-        var filteredTag = captor.getValue().getTags().getFirst();
-        assertEquals(2, filteredTag.getContents().size());
+        assertNotNull(result);
+        verify(projectMapper).toModel(any(ProjectEntity.class), isNull());
     }
 
     @Test
@@ -766,12 +750,12 @@ class ProjectOutputTest {
 
         when(projectRepository.findBySlugAndLanguage("my-project", Language.PORTUGUESE)).thenReturn(Optional.of(entity));
         when(projectRepository.save(entity)).thenReturn(entity);
-        when(projectMapper.toModel(entity)).thenReturn(expectedResult);
+        when(projectMapper.toModel(entity, Language.PORTUGUESE)).thenReturn(expectedResult);
 
-        projectOutput.findBySlugAndIncrementView("my-project", Language.PORTUGUESE);
+        var result = projectOutput.findBySlugAndIncrementView("my-project", Language.PORTUGUESE);
 
-        assertEquals(1, entity.getContents().size());
-        assertEquals(Language.PORTUGUESE, entity.getContents().getFirst().getLanguage());
+        assertEquals(expectedResult, result);
+        verify(projectMapper).toModel(entity, Language.PORTUGUESE);
     }
 
     @Test
@@ -792,11 +776,12 @@ class ProjectOutputTest {
 
         var ids = List.of(UUID.randomUUID());
         when(projectRepository.findAllById(ids)).thenReturn(List.of(entity));
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+        when(projectMapper.toModel(entity, Language.PORTUGUESE)).thenReturn(expectedResult);
 
-        projectOutput.findAllById(ids, Language.PORTUGUESE);
+        var result = projectOutput.findAllById(ids, Language.PORTUGUESE);
 
-        assertEquals(1, entity.getContents().size());
-        assertEquals(Language.PORTUGUESE, entity.getContents().getFirst().getLanguage());
+        assertEquals(1, result.size());
+        assertEquals(expectedResult, result.getFirst());
+        verify(projectMapper).toModel(entity, Language.PORTUGUESE);
     }
 }

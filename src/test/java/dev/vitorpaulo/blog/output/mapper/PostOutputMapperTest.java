@@ -169,4 +169,74 @@ class PostOutputMapperTest {
         assertEquals("Title", result.getTitle());
         assertEquals("Content", result.getContent());
     }
+
+    @Test
+    void toModel_withLanguage_filtersToRequestedLanguage() {
+        var enContent = new PostContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setContent("English Content");
+
+        var ptContent = new PostContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setContent("Conteudo");
+
+        var entity = PostEntity.builder()
+            .id(UUID.randomUUID())
+            .slug("slug")
+            .contents(new ArrayList<>(List.of(enContent, ptContent)))
+            .status(PostStatus.DRAFT)
+            .build();
+
+        var result = mapper.toModel(entity, Language.PORTUGUESE, List.of());
+
+        assertEquals(1, result.translations().size());
+        assertTrue(result.translations().containsKey(Language.PORTUGUESE));
+        assertEquals("Titulo", result.translations().get(Language.PORTUGUESE).title());
+    }
+
+    @Test
+    void toModel_withLanguage_fallsBackToEnglish() {
+        var enContent = new PostContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setContent("English Content");
+
+        var entity = PostEntity.builder()
+            .id(UUID.randomUUID())
+            .slug("slug")
+            .contents(new ArrayList<>(List.of(enContent)))
+            .status(PostStatus.DRAFT)
+            .build();
+
+        var result = mapper.toModel(entity, Language.PORTUGUESE, List.of());
+
+        assertEquals(1, result.translations().size());
+        assertTrue(result.translations().containsKey(Language.ENGLISH));
+    }
+
+    @Test
+    void toModel_withNullLanguage_returnsAllTranslations() {
+        var enContent = new PostContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setContent("English Content");
+
+        var ptContent = new PostContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setContent("Conteudo");
+
+        var entity = PostEntity.builder()
+            .id(UUID.randomUUID())
+            .slug("slug")
+            .contents(new ArrayList<>(List.of(enContent, ptContent)))
+            .status(PostStatus.DRAFT)
+            .build();
+
+        var result = mapper.toModel(entity, null, List.of());
+
+        assertEquals(2, result.translations().size());
+    }
 }

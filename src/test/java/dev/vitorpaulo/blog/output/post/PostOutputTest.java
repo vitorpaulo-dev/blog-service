@@ -87,7 +87,7 @@ class PostOutputTest {
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getViewCount()).thenReturn(5L);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
 
         var result = postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
 
@@ -101,7 +101,7 @@ class PostOutputTest {
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getViewCount()).thenReturn(null);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
 
         postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
 
@@ -325,7 +325,7 @@ class PostOutputTest {
 
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
         when(postQueryModel.tagId()).thenReturn(null);
 
@@ -402,7 +402,7 @@ class PostOutputTest {
         Page<PostEntity> page = new PageImpl<>(List.of(entity));
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList())).thenReturn(expectedResult);
 
         var queryModel = mock(PostQueryModel.class);
         when(queryModel.language()).thenReturn(Language.PORTUGUESE);
@@ -410,13 +410,10 @@ class PostOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        postOutput.search(input, null);
+        var result = postOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(PostEntity.class);
-        verify(postOutputMapper).toModel(captor.capture(), anyList());
-        var filtered = captor.getValue();
-        assertEquals(1, filtered.getContents().size());
-        assertEquals(Language.PORTUGUESE, filtered.getContents().getFirst().getLanguage());
+        assertNotNull(result);
+        verify(postOutputMapper).toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList());
     }
 
     @Test
@@ -433,7 +430,7 @@ class PostOutputTest {
         Page<PostEntity> page = new PageImpl<>(List.of(entity));
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList())).thenReturn(expectedResult);
 
         var queryModel = mock(PostQueryModel.class);
         when(queryModel.language()).thenReturn(Language.PORTUGUESE);
@@ -441,13 +438,10 @@ class PostOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        postOutput.search(input, null);
+        var result = postOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(PostEntity.class);
-        verify(postOutputMapper).toModel(captor.capture(), anyList());
-        var filtered = captor.getValue();
-        assertEquals(1, filtered.getContents().size());
-        assertEquals(Language.ENGLISH, filtered.getContents().getFirst().getLanguage());
+        assertNotNull(result);
+        verify(postOutputMapper).toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList());
     }
 
     @Test
@@ -464,7 +458,7 @@ class PostOutputTest {
         Page<PostEntity> page = new PageImpl<>(List.of(entity));
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(any(PostEntity.class), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
 
         var queryModel = mock(PostQueryModel.class);
         when(queryModel.language()).thenReturn(Language.ENGLISH);
@@ -472,13 +466,10 @@ class PostOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        postOutput.search(input, null);
+        var result = postOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(PostEntity.class);
-        verify(postOutputMapper).toModel(captor.capture(), anyList());
-        var filtered = captor.getValue();
-        assertEquals(1, filtered.getContents().size());
-        assertEquals(Language.PORTUGUESE, filtered.getContents().getFirst().getLanguage());
+        assertNotNull(result);
+        verify(postOutputMapper).toModel(any(PostEntity.class), eq(Language.ENGLISH), anyList());
     }
 
     @Test
@@ -500,7 +491,7 @@ class PostOutputTest {
         Page<PostEntity> page = new PageImpl<>(List.of(entity));
         when(postRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(any(PostEntity.class), isNull(), anyList())).thenReturn(expectedResult);
 
         var queryModel = mock(PostQueryModel.class);
         when(queryModel.language()).thenReturn(null);
@@ -508,12 +499,10 @@ class PostOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        postOutput.search(input, null);
+        var result = postOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(PostEntity.class);
-        verify(postOutputMapper).toModel(captor.capture(), anyList());
-        var filtered = captor.getValue();
-        assertEquals(2, filtered.getContents().size());
+        assertNotNull(result);
+        verify(postOutputMapper).toModel(any(PostEntity.class), isNull(), anyList());
     }
 
     @Test
@@ -541,7 +530,7 @@ class PostOutputTest {
         Page<PostEntity> page = new PageImpl<>(List.of(entity));
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList())).thenReturn(expectedResult);
 
         var queryModel = mock(PostQueryModel.class);
         when(queryModel.language()).thenReturn(Language.PORTUGUESE);
@@ -549,13 +538,10 @@ class PostOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        postOutput.search(input, null);
+        var result = postOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(PostEntity.class);
-        verify(postOutputMapper).toModel(captor.capture(), anyList());
-        var filteredTag = captor.getValue().getTags().getFirst();
-        assertEquals(1, filteredTag.getContents().size());
-        assertEquals(Language.PORTUGUESE, filteredTag.getContents().getFirst().getLanguage());
+        assertNotNull(result);
+        verify(postOutputMapper).toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList());
     }
 
     @Test
@@ -583,7 +569,7 @@ class PostOutputTest {
         Page<PostEntity> page = new PageImpl<>(List.of(entity));
         when(postRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(any(PostEntity.class), isNull(), anyList())).thenReturn(expectedResult);
 
         var queryModel = mock(PostQueryModel.class);
         when(queryModel.language()).thenReturn(null);
@@ -591,12 +577,10 @@ class PostOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        postOutput.search(input, null);
+        var result = postOutput.search(input, null);
 
-        var captor = ArgumentCaptor.forClass(PostEntity.class);
-        verify(postOutputMapper).toModel(captor.capture(), anyList());
-        var filteredTag = captor.getValue().getTags().getFirst();
-        assertEquals(2, filteredTag.getContents().size());
+        assertNotNull(result);
+        verify(postOutputMapper).toModel(any(PostEntity.class), isNull(), anyList());
     }
 
     @Test
@@ -618,11 +602,11 @@ class PostOutputTest {
 
         when(postRepository.findBySlugAndLanguage("my-post", Language.PORTUGUESE)).thenReturn(Optional.of(entity));
         when(postRepository.save(entity)).thenReturn(entity);
-        when(postOutputMapper.toModel(eq(entity), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(entity), eq(Language.PORTUGUESE), anyList())).thenReturn(expectedResult);
 
-        postOutput.findBySlugAndIncrementView("my-post", Language.PORTUGUESE);
+        var result = postOutput.findBySlugAndIncrementView("my-post", Language.PORTUGUESE);
 
-        assertEquals(1, entity.getContents().size());
-        assertEquals(Language.PORTUGUESE, entity.getContents().getFirst().getLanguage());
+        assertEquals(expectedResult, result);
+        verify(postOutputMapper).toModel(eq(entity), eq(Language.PORTUGUESE), anyList());
     }
 }
