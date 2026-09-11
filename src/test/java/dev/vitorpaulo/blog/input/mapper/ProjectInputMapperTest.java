@@ -41,10 +41,10 @@ class ProjectInputMapperTest {
         );
         var contentModel = new ProjectContentModel("Title", "Description");
         var project = new ProjectModel(
-            id, "my-project", "logo.png", "Java", "banner.png",
+            id, "my-project", "logo.png", "banner.png",
             "https://github.com", "https://website.com",
             ProjectStatus.PUBLISHED, OffsetDateTime.now(), OffsetDateTime.now(),
-            List.of(authorModel), 10L, 5L, 3L, 2L, 1L, 11L,
+            List.of(authorModel), List.of(), 10L, 5L, 3L, 2L, 1L, 11L,
             Map.of(Language.ENGLISH, contentModel)
         );
 
@@ -53,7 +53,6 @@ class ProjectInputMapperTest {
         assertEquals(id, result.id());
         assertEquals("my-project", result.slug());
         assertEquals("logo.png", result.logoUrl());
-        assertEquals("Java", result.programmingLanguage());
         assertEquals("banner.png", result.bannerUrl());
         assertEquals("https://github.com", result.githubUrl());
         assertEquals("https://website.com", result.websiteUrl());
@@ -66,6 +65,7 @@ class ProjectInputMapperTest {
         assertEquals(11L, result.reactionCount());
         assertEquals(1, result.authors().size());
         assertEquals("John", result.authors().getFirst().name());
+        assertTrue(result.tags().isEmpty());
         assertEquals(1, result.translations().size());
         assertEquals("Title", result.translations().get(Language.ENGLISH).title());
     }
@@ -73,8 +73,8 @@ class ProjectInputMapperTest {
     @Test
     void toResponse_nullStatus_returnsNullStatus() {
         var project = new ProjectModel(
-            UUID.randomUUID(), "slug", null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, Map.of()
+            UUID.randomUUID(), "slug", null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, Map.of()
         );
 
         var result = mapper.toResponse(project);
@@ -85,8 +85,8 @@ class ProjectInputMapperTest {
     @Test
     void toResponse_nullTranslations_returnsEmptyMap() {
         var project = new ProjectModel(
-            UUID.randomUUID(), "slug", null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null
+            UUID.randomUUID(), "slug", null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null
         );
 
         var result = mapper.toResponse(project);
@@ -97,8 +97,8 @@ class ProjectInputMapperTest {
     @Test
     void toResponse_nullAuthors_returnsEmptyList() {
         var project = new ProjectModel(
-            UUID.randomUUID(), "slug", null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, Map.of()
+            UUID.randomUUID(), "slug", null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, Map.of()
         );
 
         var result = mapper.toResponse(project);
@@ -115,8 +115,8 @@ class ProjectInputMapperTest {
     void toPageableResponse_validResult_returnsResponse() {
         var contentModel = new ProjectContentModel("Title", "Desc");
         var project = new ProjectModel(
-            UUID.randomUUID(), "slug", null, null, null, null, null,
-            ProjectStatus.DRAFT, null, null, List.of(), 0L, 0L, 0L, 0L, 0L, 0L,
+            UUID.randomUUID(), "slug", null, null, null, null,
+            ProjectStatus.DRAFT, null, null, List.of(), List.of(), 0L, 0L, 0L, 0L, 0L, 0L,
             Map.of(Language.ENGLISH, contentModel)
         );
         var paginatedOutput = new PaginatedOutput<>(List.of(project), 0, 10, 1, 1);
@@ -137,7 +137,8 @@ class ProjectInputMapperTest {
 
     @Test
     void toPageableInput_validRequest_returnsInput() {
-        var queryRequest = new ProjectQueryRequest("search", UUID.randomUUID(), Language.ENGLISH);
+        var tagId = UUID.randomUUID();
+        var queryRequest = new ProjectQueryRequest("search", UUID.randomUUID(), Language.ENGLISH, tagId);
         var request = new GenericPageableRequest<>(queryRequest, 1, 20, "createdAt", Sort.Direction.DESC);
 
         var result = mapper.toPageableInput(request);
@@ -149,6 +150,7 @@ class ProjectInputMapperTest {
         assertEquals("createdAt", result.sort());
         assertEquals(Sort.Direction.DESC, result.direction());
         assertEquals(Language.ENGLISH, result.query().language());
+        assertEquals(tagId, result.query().tagId());
     }
 
     @Test
@@ -161,6 +163,7 @@ class ProjectInputMapperTest {
         assertNull(result.query().query());
         assertNull(result.query().authorId());
         assertNull(result.query().language());
+        assertNull(result.query().tagId());
     }
 
     @Test
@@ -176,8 +179,9 @@ class ProjectInputMapperTest {
     @Test
     void toModel_updateRequest_mapsId() {
         var id = UUID.randomUUID();
+        var tagIds = List.of(UUID.randomUUID());
         var request = new UpdateProjectRequest(
-            "logo.png", "banner.png", "github", "website", "Java",
+            "logo.png", "banner.png", "github", "website", tagIds,
             Map.of(Language.ENGLISH, new ProjectContentRequest("Title", "Desc")),
             ProjectStatus.PUBLISHED
         );
@@ -189,7 +193,6 @@ class ProjectInputMapperTest {
         assertEquals("banner.png", result.bannerUrl());
         assertEquals("github", result.githubUrl());
         assertEquals("website", result.websiteUrl());
-        assertEquals("Java", result.programmingLanguage());
         assertEquals(ProjectStatus.PUBLISHED, result.status());
         assertEquals(1, result.translations().size());
         assertEquals("Title", result.translations().get(Language.ENGLISH).title());

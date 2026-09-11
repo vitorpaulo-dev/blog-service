@@ -45,6 +45,8 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.POST, "/v1/project/search").permitAll()
 				.requestMatchers(HttpMethod.POST, "/v1/project/batch").permitAll()
 				.requestMatchers(HttpMethod.GET, "/v1/project/*").authenticated()
+				.requestMatchers(HttpMethod.POST, "/v1/tag/search").permitAll()
+				.requestMatchers("/v1/tag/**").authenticated()
 				.requestMatchers(HttpMethod.POST, "/v1/upload").authenticated()
 				.anyRequest().permitAll()
 			)

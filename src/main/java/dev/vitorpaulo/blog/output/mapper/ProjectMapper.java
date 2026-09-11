@@ -21,56 +21,12 @@ public interface ProjectMapper {
     @Mapping(target = "translations", expression = "java(contentsToTranslations(entity.getContents()))")
     ProjectModel toModel(ProjectEntity entity);
 
-    default ProjectModel toModel(ProjectEntity entity, Language language) {
-        ProjectModel model = toModel(entity);
-        if (model == null || language == null) return model;
-        return filterTranslations(model, language);
-    }
-
-    private ProjectModel filterTranslations(ProjectModel model, Language language) {
-        var filtered = filterTranslationMap(model.translations(), language);
-        return new ProjectModel(
-            model.id(),
-            model.slug(),
-            model.logoUrl(),
-            model.programmingLanguage(),
-            model.bannerUrl(),
-            model.githubUrl(),
-            model.websiteUrl(),
-            model.status(),
-            model.createdAt(),
-            model.updatedAt(),
-            model.authors(),
-            model.viewCount(),
-            model.loveCount(),
-            model.celebrateCount(),
-            model.geniusCount(),
-            model.helpCount(),
-            model.reactionCount(),
-            filtered
-        );
-    }
-
-    private <T> Map<Language, T> filterTranslationMap(Map<Language, T> translations, Language requested) {
-        if (translations == null || translations.isEmpty()) return Map.of();
-        if (translations.containsKey(requested)) {
-            return Map.of(requested, translations.get(requested));
-        }
-        if (translations.containsKey(Language.ENGLISH)) {
-            return Map.of(Language.ENGLISH, translations.get(Language.ENGLISH));
-        }
-        return translations.entrySet().stream()
-            .findFirst()
-            .map(e -> Map.of(e.getKey(), e.getValue()))
-            .orElse(Map.of());
-    }
-
     ProjectContentModel toContentModel(ProjectContentEntity entity);
 
     default Map<Language, ProjectContentModel> contentsToTranslations(List<ProjectContentEntity> contents) {
         if (contents == null) return Map.of();
         return contents.stream()
-			.collect(Collectors.toMap(
+		.collect(Collectors.toMap(
             ProjectContentEntity::getLanguage,
             this::toContentModel
         ));
@@ -80,6 +36,7 @@ public interface ProjectMapper {
     @Mapping(target = "slug", ignore = true)
     @Mapping(target = "contents", ignore = true)
     @Mapping(target = "authors", ignore = true)
+    @Mapping(target = "tags", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "viewCount", ignore = true)

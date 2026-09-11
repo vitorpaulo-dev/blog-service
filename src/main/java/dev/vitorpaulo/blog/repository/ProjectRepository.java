@@ -54,6 +54,15 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
                 )
             )
             AND (
+                :tagId IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM project_tag pt
+                    WHERE pt.project_id = p.id
+                      AND pt.tag_id = :tagId
+                )
+            )
+            AND (
                 :query IS NULL
                 OR pc.search_vector @@ websearch_to_tsquery('simple', :query)
             )
@@ -92,6 +101,15 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
                 )
             )
             AND (
+                :tagId IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM project_tag pt
+                    WHERE pt.project_id = p.id
+                      AND pt.tag_id = :tagId
+                )
+            )
+            AND (
                 :query IS NULL
                 OR pc.search_vector @@ websearch_to_tsquery('simple', :query)
             )
@@ -101,6 +119,7 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
     Page<ProjectEntity> search(
         @Param("query") String query,
         @Param("authorId") UUID authorId,
+        @Param("tagId") UUID tagId,
         @Param("language") String language,
         @Param("showDrafts") boolean showDrafts,
         Pageable pageable,

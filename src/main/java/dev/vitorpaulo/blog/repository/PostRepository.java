@@ -54,6 +54,15 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
                 )
             )
             AND (
+                :tagId IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM post_tag pt
+                    WHERE pt.post_id = p.id
+                      AND pt.tag_id = :tagId
+                )
+            )
+            AND (
                 :query IS NULL
                 OR pc.search_vector @@ websearch_to_tsquery('simple', :query)
             )
@@ -92,6 +101,15 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
                 )
             )
             AND (
+                :tagId IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM post_tag pt
+                    WHERE pt.post_id = p.id
+                      AND pt.tag_id = :tagId
+                )
+            )
+            AND (
                 :query IS NULL
                 OR pc.search_vector @@ websearch_to_tsquery('simple', :query)
             )
@@ -101,6 +119,7 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
     Page<PostEntity> search(
         @Param("query") String query,
         @Param("authorId") UUID authorId,
+        @Param("tagId") UUID tagId,
         @Param("language") String language,
         @Param("showDrafts") boolean showDrafts,
         Pageable pageable,

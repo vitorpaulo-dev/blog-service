@@ -3,9 +3,7 @@ package dev.vitorpaulo.blog.output.post;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
-import dev.vitorpaulo.blog.domain.AuthorEntity;
-import dev.vitorpaulo.blog.domain.PostContentEntity;
-import dev.vitorpaulo.blog.domain.PostEntity;
+import dev.vitorpaulo.blog.domain.*;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
@@ -18,6 +16,7 @@ import dev.vitorpaulo.blog.repository.TagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -88,7 +87,7 @@ class PostOutputTest {
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getViewCount()).thenReturn(5L);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         var result = postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
 
@@ -102,7 +101,7 @@ class PostOutputTest {
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getViewCount()).thenReturn(null);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
 
@@ -324,10 +323,11 @@ class PostOutputTest {
     void search_withLanguage_returnsPaginatedResults() {
         Page<PostEntity> page = new PageImpl<>(List.of(postEntity));
 
-        when(postRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(postQueryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(postQueryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
@@ -341,42 +341,288 @@ class PostOutputTest {
     void search_nullLanguage_passesNullToRepository() {
         Page<PostEntity> page = new PageImpl<>(List.of());
 
-        when(postRepository.search(any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(postRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
         when(postQueryModel.language()).thenReturn(null);
+        when(postQueryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(postQueryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
         postOutput.search(input, null);
 
-        verify(postRepository).search(isNull(), isNull(), isNull(), eq(false), any(PageRequest.class), anyString());
+        verify(postRepository).search(isNull(), isNull(), isNull(), isNull(), eq(false), any(PageRequest.class), anyString());
     }
 
     @Test
     void search_viewCountSort_mapsCorrectly() {
         Page<PostEntity> page = new PageImpl<>(List.of());
-        when(postRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(postQueryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(postQueryModel, 0, 10, "viewCount", Sort.Direction.ASC);
 
         postOutput.search(input, author);
 
-        verify(postRepository).search(any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("view_count ASC"));
+        verify(postRepository).search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("view_count ASC"));
     }
 
     @Test
     void search_unknownField_defaultsToCreatedAtSort() {
         Page<PostEntity> page = new PageImpl<>(List.of());
-        when(postRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(postQueryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(postQueryModel, 0, 10, "unknownField", Sort.Direction.DESC);
 
         postOutput.search(input, author);
 
-        verify(postRepository).search(any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("created_at DESC, updated_at DESC"));
+        verify(postRepository).search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("created_at DESC, updated_at DESC"));
+    }
+
+    @Test
+    void search_filtersContentsToRequestedLanguage() {
+        var enContent = new PostContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setContent("English Content");
+
+        var ptContent = new PostContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo Portugues");
+        ptContent.setContent("Conteudo Portugues");
+
+        var entity = new PostEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent, ptContent)));
+        entity.setTags(new ArrayList<>());
+
+        Page<PostEntity> page = new PageImpl<>(List.of(entity));
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+
+        var queryModel = mock(PostQueryModel.class);
+        when(queryModel.language()).thenReturn(Language.PORTUGUESE);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        postOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(PostEntity.class);
+        verify(postOutputMapper).toModel(captor.capture(), anyList());
+        var filtered = captor.getValue();
+        assertEquals(1, filtered.getContents().size());
+        assertEquals(Language.PORTUGUESE, filtered.getContents().getFirst().getLanguage());
+    }
+
+    @Test
+    void search_fallsBackToEnglishWhenLanguageNotFound() {
+        var enContent = new PostContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setContent("English Content");
+
+        var entity = new PostEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent)));
+        entity.setTags(new ArrayList<>());
+
+        Page<PostEntity> page = new PageImpl<>(List.of(entity));
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+
+        var queryModel = mock(PostQueryModel.class);
+        when(queryModel.language()).thenReturn(Language.PORTUGUESE);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        postOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(PostEntity.class);
+        verify(postOutputMapper).toModel(captor.capture(), anyList());
+        var filtered = captor.getValue();
+        assertEquals(1, filtered.getContents().size());
+        assertEquals(Language.ENGLISH, filtered.getContents().getFirst().getLanguage());
+    }
+
+    @Test
+    void search_fallsBackToFirstAvailableWhenEnglishNotFound() {
+        var ptContent = new PostContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setContent("Conteudo");
+
+        var entity = new PostEntity();
+        entity.setContents(new ArrayList<>(List.of(ptContent)));
+        entity.setTags(new ArrayList<>());
+
+        Page<PostEntity> page = new PageImpl<>(List.of(entity));
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+
+        var queryModel = mock(PostQueryModel.class);
+        when(queryModel.language()).thenReturn(Language.ENGLISH);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        postOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(PostEntity.class);
+        verify(postOutputMapper).toModel(captor.capture(), anyList());
+        var filtered = captor.getValue();
+        assertEquals(1, filtered.getContents().size());
+        assertEquals(Language.PORTUGUESE, filtered.getContents().getFirst().getLanguage());
+    }
+
+    @Test
+    void search_nullLanguage_keepsAllTranslations() {
+        var enContent = new PostContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setContent("English Content");
+
+        var ptContent = new PostContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setContent("Conteudo");
+
+        var entity = new PostEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent, ptContent)));
+        entity.setTags(new ArrayList<>());
+
+        Page<PostEntity> page = new PageImpl<>(List.of(entity));
+        when(postRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+
+        var queryModel = mock(PostQueryModel.class);
+        when(queryModel.language()).thenReturn(null);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        postOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(PostEntity.class);
+        verify(postOutputMapper).toModel(captor.capture(), anyList());
+        var filtered = captor.getValue();
+        assertEquals(2, filtered.getContents().size());
+    }
+
+    @Test
+    void search_filtersTagContentsToRequestedLanguage() {
+        var tagEnContent = new TagContentEntity();
+        tagEnContent.setLanguage(Language.ENGLISH);
+        tagEnContent.setName("Java");
+
+        var tagPtContent = new TagContentEntity();
+        tagPtContent.setLanguage(Language.PORTUGUESE);
+        tagPtContent.setName("Java PT");
+
+        var tag = new TagEntity();
+        tag.setContents(new ArrayList<>(List.of(tagEnContent, tagPtContent)));
+
+        var enContent = new PostContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("Title");
+        enContent.setContent("Content");
+
+        var entity = new PostEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent)));
+        entity.setTags(new ArrayList<>(List.of(tag)));
+
+        Page<PostEntity> page = new PageImpl<>(List.of(entity));
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+
+        var queryModel = mock(PostQueryModel.class);
+        when(queryModel.language()).thenReturn(Language.PORTUGUESE);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        postOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(PostEntity.class);
+        verify(postOutputMapper).toModel(captor.capture(), anyList());
+        var filteredTag = captor.getValue().getTags().getFirst();
+        assertEquals(1, filteredTag.getContents().size());
+        assertEquals(Language.PORTUGUESE, filteredTag.getContents().getFirst().getLanguage());
+    }
+
+    @Test
+    void search_nullLanguage_keepsAllTagTranslations() {
+        var tagEnContent = new TagContentEntity();
+        tagEnContent.setLanguage(Language.ENGLISH);
+        tagEnContent.setName("Java");
+
+        var tagPtContent = new TagContentEntity();
+        tagPtContent.setLanguage(Language.PORTUGUESE);
+        tagPtContent.setName("Java PT");
+
+        var tag = new TagEntity();
+        tag.setContents(new ArrayList<>(List.of(tagEnContent, tagPtContent)));
+
+        var enContent = new PostContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("Title");
+        enContent.setContent("Content");
+
+        var entity = new PostEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent)));
+        entity.setTags(new ArrayList<>(List.of(tag)));
+
+        Page<PostEntity> page = new PageImpl<>(List.of(entity));
+        when(postRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
+
+        var queryModel = mock(PostQueryModel.class);
+        when(queryModel.language()).thenReturn(null);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        postOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(PostEntity.class);
+        verify(postOutputMapper).toModel(captor.capture(), anyList());
+        var filteredTag = captor.getValue().getTags().getFirst();
+        assertEquals(2, filteredTag.getContents().size());
+    }
+
+    @Test
+    void findBySlugAndIncrementView_filtersContentsToRequestedLanguage() {
+        var enContent = new PostContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setContent("English Content");
+
+        var ptContent = new PostContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setContent("Conteudo");
+
+        var entity = new PostEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent, ptContent)));
+        entity.setTags(new ArrayList<>());
+        entity.setViewCount(0L);
+
+        when(postRepository.findBySlugAndLanguage("my-post", Language.PORTUGUESE)).thenReturn(Optional.of(entity));
+        when(postRepository.save(entity)).thenReturn(entity);
+        when(postOutputMapper.toModel(eq(entity), anyList())).thenReturn(expectedResult);
+
+        postOutput.findBySlugAndIncrementView("my-post", Language.PORTUGUESE);
+
+        assertEquals(1, entity.getContents().size());
+        assertEquals(Language.PORTUGUESE, entity.getContents().getFirst().getLanguage());
     }
 }

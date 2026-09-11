@@ -47,13 +47,13 @@ public class ProjectController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ProjectResponse create(@Valid @RequestBody CreateProjectRequest request, @CurrentAuthor AuthorModel author) {
-        final var project = createProjectUseCase.execute(projectInputMapper.toModel(request), author);
+        final var project = createProjectUseCase.execute(projectInputMapper.toModel(request), request.tagIds(), author);
         return projectInputMapper.toResponse(project);
     }
 
     @PutMapping("/{id}")
     public ProjectResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateProjectRequest request, @CurrentAuthor AuthorModel author) {
-        final var project = updateProjectUseCase.execute(projectInputMapper.toModel(request, id), author);
+        final var project = updateProjectUseCase.execute(projectInputMapper.toModel(request, id), request.tagIds(), author);
         return projectInputMapper.toResponse(project);
     }
 

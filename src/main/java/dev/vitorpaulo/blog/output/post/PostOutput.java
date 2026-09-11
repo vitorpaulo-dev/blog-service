@@ -52,7 +52,9 @@ public class PostOutput {
         entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
 
         final var saved = postRepository.save(entity);
-        return postOutputMapper.toModel(saved, language, postRepository.findProjectIdsByPostId(saved.getId()));
+        filterContents(saved, language);
+        filterTagContents(saved, language);
+        return postOutputMapper.toModel(saved, postRepository.findProjectIdsByPostId(saved.getId()));
     }
 
     @Transactional
@@ -124,6 +126,7 @@ public class PostOutput {
         final var page = postRepository.search(
                 pageableInput.query().query(),
                 pageableInput.query().authorId(),
+                pageableInput.query().tagId(),
                 language != null ? language.name() : null,
                 author != null,
                 pageable,
@@ -132,7 +135,9 @@ public class PostOutput {
 
         final var projectIdsMap = buildProjectIdsMap(page.getContent());
         final var content = page.getContent().stream()
-            .map(entity -> postOutputMapper.toModel(entity, language, projectIdsMap.getOrDefault(entity.getId(), List.of())))
+            .peek(entity -> filterContents(entity, language))
+            .peek(entity -> filterTagContents(entity, language))
+            .map(entity -> postOutputMapper.toModel(entity, projectIdsMap.getOrDefault(entity.getId(), List.of())))
             .toList();
 
         return new PaginatedOutput<>(
@@ -152,6 +157,33 @@ public class PostOutput {
                 row -> (UUID) row[0],
                 Collectors.mapping(row -> (UUID) row[1], Collectors.toList())
             ));
+    }
+
+    private void filterContents(PostEntity entity, Language language) {
+        if (language == null || entity.getContents().size() <= 1) return;
+        final var filtered = entity.getContents().stream()
+            .filter(c -> c.getLanguage().equals(language))
+            .findFirst()
+            .or(() -> entity.getContents().stream()
+                .filter(c -> c.getLanguage() == Language.ENGLISH)
+                .findFirst())
+            .or(() -> entity.getContents().stream().findFirst());
+        entity.setContents(filtered.map(List::of).orElse(List.of()));
+    }
+
+    private void filterTagContents(PostEntity entity, Language language) {
+        if (language == null || entity.getTags() == null) return;
+        entity.getTags().forEach(tag -> {
+            if (tag.getContents().size() <= 1) return;
+            final var filtered = tag.getContents().stream()
+                .filter(c -> c.getLanguage().equals(language))
+                .findFirst()
+                .or(() -> tag.getContents().stream()
+                    .filter(c -> c.getLanguage() == Language.ENGLISH)
+                    .findFirst())
+                .or(() -> tag.getContents().stream().findFirst());
+            tag.setContents(filtered.map(List::of).orElse(List.of()));
+        });
     }
 
     private void syncContents(PostEntity entity, Map<Language, PostContentModel> translations) {

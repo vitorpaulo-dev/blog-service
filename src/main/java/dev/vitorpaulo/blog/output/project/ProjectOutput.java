@@ -11,6 +11,7 @@ import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
+import dev.vitorpaulo.blog.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -31,6 +32,7 @@ public class ProjectOutput {
 	private final ProjectRepository projectRepository;
 	private final ProjectMapper projectMapper;
 	private final AuthorRepository authorRepository;
+	private final TagRepository tagRepository;
 
 	public ProjectModel findById(UUID id) {
 		return projectRepository.findById(id)
@@ -44,11 +46,14 @@ public class ProjectOutput {
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_SLUG_NOT_FOUND));
 		entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
 
-		return projectMapper.toModel(projectRepository.save(entity), language);
+		final var saved = projectRepository.save(entity);
+		filterContents(saved, language);
+		filterTagContents(saved, language);
+		return projectMapper.toModel(saved);
 	}
 
 	@Transactional
-	public ProjectModel save(ProjectModel project, AuthorModel author) {
+	public ProjectModel save(ProjectModel project, List<UUID> tagIds, AuthorModel author) {
 		final var firstContent = getFirstContent(project.translations());
 		final var slug = generateUniqueSlug(firstContent.title(), null);
 
@@ -59,12 +64,13 @@ public class ProjectOutput {
 
 		syncContents(entity, project.translations());
 		entity.setAuthors(authorRepository.findAllById(List.of(author.id())));
+		if (tagIds != null) entity.setTags(tagRepository.findAllById(tagIds));
 
 		return projectMapper.toModel(projectRepository.save(entity));
 	}
 
 	@Transactional
-	public ProjectModel update(ProjectModel project, AuthorModel author) {
+	public ProjectModel update(ProjectModel project, List<UUID> tagIds, AuthorModel author) {
 		final var entity = projectRepository.findByIdWithAuthor(project.id(), author.id(), isAdmin(author.role()))
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
 
@@ -80,6 +86,8 @@ public class ProjectOutput {
 
 		syncContents(entity, project.translations());
 
+		if (tagIds != null) entity.setTags(tagRepository.findAllById(tagIds));
+
 		return projectMapper.toModel(projectRepository.save(entity));
 	}
 
@@ -91,22 +99,28 @@ public class ProjectOutput {
 	public PaginatedOutput<ProjectModel> search(PaginatedInput<ProjectQueryModel> pageableInput, AuthorModel author) {
 		final var language = pageableInput.query().language();
 		final var pageable = PageRequest.of(pageableInput.page(), pageableInput.size());
-		final var result = projectRepository.search(
+		final var page = projectRepository.search(
 				pageableInput.query().query(),
 				pageableInput.query().authorId(),
+				pageableInput.query().tagId(),
 				language != null ? language.name() : null,
 				author != null,
 				pageable,
 				mapSortProperty(pageableInput.sort(), pageableInput.direction())
-			)
-			.map(entity -> projectMapper.toModel(entity, language));
+			);
+
+		final var content = page.getContent().stream()
+			.peek(entity -> filterContents(entity, language))
+			.peek(entity -> filterTagContents(entity, language))
+			.map(projectMapper::toModel)
+			.toList();
 
 		return new PaginatedOutput<>(
-			result.getContent(),
-			result.getNumber(),
-			result.getSize(),
-			result.getTotalElements(),
-			result.getTotalPages()
+			content,
+			page.getNumber(),
+			page.getSize(),
+			page.getTotalElements(),
+			page.getTotalPages()
 		);
 	}
 
@@ -120,7 +134,9 @@ public class ProjectOutput {
 	public List<ProjectModel> findAllById(List<UUID> ids, Language language) {
 		if (ids == null || ids.isEmpty()) return List.of();
 		return projectRepository.findAllById(ids).stream()
-			.map(entity -> projectMapper.toModel(entity, language))
+			.peek(entity -> filterContents(entity, language))
+			.peek(entity -> filterTagContents(entity, language))
+			.map(projectMapper::toModel)
 			.toList();
 	}
 
@@ -184,5 +200,32 @@ public class ProjectOutput {
 			case "reactionCount" -> "reaction_count " + dir;
 			default -> "created_at " + dir + ", updated_at " + dir;
 		};
+	}
+
+	private void filterContents(ProjectEntity entity, Language language) {
+		if (language == null || entity.getContents().size() <= 1) return;
+		final var filtered = entity.getContents().stream()
+			.filter(c -> c.getLanguage().equals(language))
+			.findFirst()
+			.or(() -> entity.getContents().stream()
+				.filter(c -> c.getLanguage() == Language.ENGLISH)
+				.findFirst())
+			.or(() -> entity.getContents().stream().findFirst());
+		entity.setContents(filtered.map(List::of).orElse(List.of()));
+	}
+
+	private void filterTagContents(ProjectEntity entity, Language language) {
+		if (language == null || entity.getTags() == null) return;
+		entity.getTags().forEach(tag -> {
+			if (tag.getContents().size() <= 1) return;
+			final var filtered = tag.getContents().stream()
+				.filter(c -> c.getLanguage().equals(language))
+				.findFirst()
+				.or(() -> tag.getContents().stream()
+					.filter(c -> c.getLanguage() == Language.ENGLISH)
+					.findFirst())
+				.or(() -> tag.getContents().stream().findFirst());
+			tag.setContents(filtered.map(List::of).orElse(List.of()));
+		});
 	}
 }

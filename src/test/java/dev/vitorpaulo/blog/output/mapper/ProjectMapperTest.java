@@ -33,7 +33,6 @@ class ProjectMapperTest {
             .id(id)
             .slug("my-project")
             .logoUrl("logo.png")
-            .programmingLanguage("Java")
             .bannerUrl("banner.png")
             .githubUrl("github")
             .websiteUrl("website")
@@ -51,7 +50,6 @@ class ProjectMapperTest {
         assertEquals(id, result.id());
         assertEquals("my-project", result.slug());
         assertEquals("logo.png", result.logoUrl());
-        assertEquals("Java", result.programmingLanguage());
         assertEquals("banner.png", result.bannerUrl());
         assertEquals("github", result.githubUrl());
         assertEquals("website", result.websiteUrl());
@@ -66,7 +64,7 @@ class ProjectMapperTest {
     }
 
     @Test
-    void toModel_entityWithLanguage_filtersTranslations() {
+    void toModel_multipleContents_returnsAllTranslations() {
         var enContent = new ProjectContentEntity();
         enContent.setLanguage(Language.ENGLISH);
         enContent.setTitle("English Title");
@@ -84,69 +82,11 @@ class ProjectMapperTest {
             .status(ProjectStatus.DRAFT)
             .build();
 
-        var result = mapper.toModel(entity, Language.PORTUGUESE);
+        var result = mapper.toModel(entity);
 
-        assertEquals(1, result.translations().size());
+        assertEquals(2, result.translations().size());
         assertTrue(result.translations().containsKey(Language.PORTUGUESE));
-        assertEquals("Portuguese Title", result.translations().get(Language.PORTUGUESE).title());
-    }
-
-    @Test
-    void toModel_entityWithLanguage_fallsBackToEnglish() {
-        var enContent = new ProjectContentEntity();
-        enContent.setLanguage(Language.ENGLISH);
-        enContent.setTitle("English Title");
-        enContent.setDescription("English Desc");
-
-        var entity = ProjectEntity.builder()
-            .id(UUID.randomUUID())
-            .slug("slug")
-            .contents(new ArrayList<>(List.of(enContent)))
-            .status(ProjectStatus.DRAFT)
-            .build();
-
-        var result = mapper.toModel(entity, Language.PORTUGUESE);
-
-        assertEquals(1, result.translations().size());
         assertTrue(result.translations().containsKey(Language.ENGLISH));
-    }
-
-    @Test
-    void toModel_entityWithLanguage_fallsBackToFirstAvailable() {
-        var ptContent = new ProjectContentEntity();
-        ptContent.setLanguage(Language.PORTUGUESE);
-        ptContent.setTitle("Portuguese Title");
-        ptContent.setDescription("Portuguese Desc");
-
-        var entity = ProjectEntity.builder()
-            .id(UUID.randomUUID())
-            .slug("slug")
-            .contents(new ArrayList<>(List.of(ptContent)))
-            .status(ProjectStatus.DRAFT)
-            .build();
-
-        var result = mapper.toModel(entity, Language.ENGLISH);
-
-        assertEquals(1, result.translations().size());
-        assertTrue(result.translations().containsKey(Language.PORTUGUESE));
-    }
-
-    @Test
-    void toModel_nullLanguage_returnsAllTranslations() {
-        var enContent = new ProjectContentEntity();
-        enContent.setLanguage(Language.ENGLISH);
-        enContent.setTitle("English");
-
-        var entity = ProjectEntity.builder()
-            .id(UUID.randomUUID())
-            .slug("slug")
-            .contents(new ArrayList<>(List.of(enContent)))
-            .status(ProjectStatus.DRAFT)
-            .build();
-
-        var result = mapper.toModel(entity, null);
-
-        assertEquals(1, result.translations().size());
     }
 
     @Test
@@ -183,7 +123,6 @@ class ProjectMapperTest {
             .id(UUID.randomUUID())
             .slug("old-slug")
             .logoUrl("old-logo.png")
-            .programmingLanguage("Python")
             .bannerUrl("old-banner.png")
             .githubUrl("old-github")
             .websiteUrl("old-website")
@@ -193,16 +132,15 @@ class ProjectMapperTest {
             .build();
 
         var model = new ProjectModel(
-            UUID.randomUUID(), "new-slug", "new-logo.png", "Java",
+            UUID.randomUUID(), "new-slug", "new-logo.png",
             "new-banner.png", "new-github", "new-website",
-            ProjectStatus.PUBLISHED, null, null, null,
+            ProjectStatus.PUBLISHED, null, null, null, null,
             200L, 100L, 50L, 25L, 10L, 185L, Map.of()
         );
 
         mapper.updateEntity(model, entity);
 
         assertEquals("new-logo.png", entity.getLogoUrl());
-        assertEquals("Java", entity.getProgrammingLanguage());
         assertEquals("new-banner.png", entity.getBannerUrl());
         assertEquals("new-github", entity.getGithubUrl());
         assertEquals("new-website", entity.getWebsiteUrl());

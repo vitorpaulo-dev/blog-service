@@ -35,9 +35,6 @@ public class ProjectEntity {
     @Column(name = "logo_url")
     private String logoUrl;
 
-    @Column(name = "programming_language")
-    private String programmingLanguage;
-
     @Column(name = "banner_url")
     private String bannerUrl;
 
@@ -63,6 +60,14 @@ public class ProjectEntity {
             inverseJoinColumns = @JoinColumn(name = "author_id")
     )
     private List<AuthorEntity> authors;
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "project_tag",
+            joinColumns = @JoinColumn(name = "project_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    private List<TagEntity> tags;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;

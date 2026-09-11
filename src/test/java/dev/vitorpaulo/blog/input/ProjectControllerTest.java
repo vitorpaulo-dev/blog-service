@@ -57,27 +57,29 @@ class ProjectControllerTest {
 
     @Test
     void create_validRequest_returnsCreatedResponse() {
+        when(createRequest.tagIds()).thenReturn(null);
         when(projectInputMapper.toModel(createRequest)).thenReturn(projectModel);
-        when(createProjectUseCase.execute(projectModel, author)).thenReturn(projectModel);
+        when(createProjectUseCase.execute(projectModel, null, author)).thenReturn(projectModel);
         when(projectInputMapper.toResponse(projectModel)).thenReturn(projectResponse);
 
         var result = projectController.create(createRequest, author);
 
         assertEquals(projectResponse, result);
-        verify(createProjectUseCase).execute(projectModel, author);
+        verify(createProjectUseCase).execute(projectModel, null, author);
     }
 
     @Test
     void update_validRequest_returnsUpdatedResponse() {
         var id = UUID.randomUUID();
+        when(updateRequest.tagIds()).thenReturn(null);
         when(projectInputMapper.toModel(updateRequest, id)).thenReturn(projectModel);
-        when(updateProjectUseCase.execute(projectModel, author)).thenReturn(projectModel);
+        when(updateProjectUseCase.execute(projectModel, null, author)).thenReturn(projectModel);
         when(projectInputMapper.toResponse(projectModel)).thenReturn(projectResponse);
 
         var result = projectController.update(id, updateRequest, author);
 
         assertEquals(projectResponse, result);
-        verify(updateProjectUseCase).execute(projectModel, author);
+        verify(updateProjectUseCase).execute(projectModel, null, author);
     }
 
     @Test

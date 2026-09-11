@@ -114,7 +114,7 @@ public interface PostInputMapper {
         final var contentMap = model.translations() != null
             ? model.translations().entrySet().stream().collect(Collectors.toMap(
                 Map.Entry::getKey,
-                e -> new TagContentResponse(e.getValue().name(), e.getValue().description())
+                e -> new TagContentResponse(e.getValue().name())
             ))
             : Map.<Language, TagContentResponse>of();
         return new dev.vitorpaulo.blog.input.response.TagResponse(model.id(), model.slug(), contentMap);
@@ -132,7 +132,6 @@ public interface PostInputMapper {
             model.id(),
             model.slug(),
             model.logoUrl(),
-            model.programmingLanguage(),
             model.bannerUrl(),
             model.githubUrl(),
             model.websiteUrl(),
@@ -140,6 +139,7 @@ public interface PostInputMapper {
             model.createdAt(),
             model.updatedAt(),
             model.authors() != null ? model.authors().stream().map(this::toAuthorResponse).toList() : List.of(),
+            model.tags() != null ? model.tags().stream().map(this::toTagResponse).toList() : List.of(),
             model.viewCount(),
             model.loveCount(),
             model.celebrateCount(),
@@ -165,8 +165,8 @@ public interface PostInputMapper {
         if (request == null) return null;
         final var query = request.query();
         final var queryModel = query != null
-            ? new PostQueryModel(query.query(), query.authorId(), query.language())
-            : new PostQueryModel(null, null, null);
+            ? new PostQueryModel(query.query(), query.authorId(), query.language(), query.tagId())
+            : new PostQueryModel(null, null, null, null);
         return new PaginatedInput<>(
             queryModel,
             request.page() != null ? request.page() : 0,

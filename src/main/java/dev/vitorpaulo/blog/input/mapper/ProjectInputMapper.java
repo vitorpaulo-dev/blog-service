@@ -9,6 +9,8 @@ import dev.vitorpaulo.blog.input.request.UpdateProjectRequest;
 import dev.vitorpaulo.blog.input.response.AuthorContentResponse;
 import dev.vitorpaulo.blog.input.response.ProjectContentResponse;
 import dev.vitorpaulo.blog.input.response.ProjectResponse;
+import dev.vitorpaulo.blog.input.response.TagContentResponse;
+import dev.vitorpaulo.blog.input.response.TagResponse;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
@@ -29,6 +31,7 @@ public interface ProjectInputMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "authors", ignore = true)
+    @Mapping(target = "tags", ignore = true)
     @Mapping(target = "viewCount", ignore = true)
     @Mapping(target = "loveCount", ignore = true)
     @Mapping(target = "celebrateCount", ignore = true)
@@ -42,6 +45,7 @@ public interface ProjectInputMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "authors", ignore = true)
+    @Mapping(target = "tags", ignore = true)
     @Mapping(target = "viewCount", ignore = true)
     @Mapping(target = "loveCount", ignore = true)
     @Mapping(target = "celebrateCount", ignore = true)
@@ -58,7 +62,6 @@ public interface ProjectInputMapper {
             project.id(),
             project.slug(),
             project.logoUrl(),
-            project.programmingLanguage(),
             project.bannerUrl(),
             project.githubUrl(),
             project.websiteUrl(),
@@ -66,6 +69,7 @@ public interface ProjectInputMapper {
             project.createdAt(),
             project.updatedAt(),
             project.authors() != null ? project.authors().stream().map(this::toAuthorResponse).toList() : List.of(),
+            project.tags() != null ? project.tags().stream().map(this::toTagResponse).toList() : List.of(),
             project.viewCount(),
             project.loveCount(),
             project.celebrateCount(),
@@ -102,6 +106,17 @@ public interface ProjectInputMapper {
         );
     }
 
+    default TagResponse toTagResponse(TagModel model) {
+        if (model == null) return null;
+        final var contentMap = model.translations() != null
+            ? model.translations().entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey,
+                e -> new TagContentResponse(e.getValue().name())
+            ))
+            : Map.<Language, TagContentResponse>of();
+        return new TagResponse(model.id(), model.slug(), contentMap);
+    }
+
     default GenericPageableResponse<ProjectResponse> toPageableResponse(PaginatedOutput<ProjectModel> result) {
         if (result == null) return null;
         return new GenericPageableResponse<>(
@@ -117,8 +132,8 @@ public interface ProjectInputMapper {
         if (request == null) return null;
         final var query = request.query();
         final var queryModel = query != null
-            ? new ProjectQueryModel(query.query(), query.authorId(), query.language())
-            : new ProjectQueryModel(null, null, null);
+            ? new ProjectQueryModel(query.query(), query.authorId(), query.language(), query.tagId())
+            : new ProjectQueryModel(null, null, null, null);
         return new PaginatedInput<>(
             queryModel,
             request.page() != null ? request.page() : 0,

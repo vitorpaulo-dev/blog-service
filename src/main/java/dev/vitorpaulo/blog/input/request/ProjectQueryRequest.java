@@ -7,5 +7,6 @@ import java.util.UUID;
 public record ProjectQueryRequest(
     String query,
     UUID authorId,
-    Language language
+    Language language,
+    UUID tagId
 ) {}

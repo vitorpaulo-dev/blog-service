@@ -2,16 +2,17 @@ package dev.vitorpaulo.blog.output.project;
 
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
-import dev.vitorpaulo.blog.domain.ProjectContentEntity;
-import dev.vitorpaulo.blog.domain.ProjectEntity;
+import dev.vitorpaulo.blog.domain.*;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.ProjectMapper;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
+import dev.vitorpaulo.blog.repository.TagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,6 +33,7 @@ class ProjectOutputTest {
     @Mock private ProjectRepository projectRepository;
     @Mock private ProjectMapper projectMapper;
     @Mock private AuthorRepository authorRepository;
+    @Mock private TagRepository tagRepository;
     @Mock private AuthorModel author;
     @Mock private ProjectModel project;
     @Mock private ProjectModel expectedResult;
@@ -73,7 +75,7 @@ class ProjectOutputTest {
         when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
         when(projectEntity.getViewCount()).thenReturn(5L);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity, Language.ENGLISH)).thenReturn(expectedResult);
+        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
         var result = projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH);
 
@@ -87,7 +89,7 @@ class ProjectOutputTest {
         when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
         when(projectEntity.getViewCount()).thenReturn(null);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity, Language.ENGLISH)).thenReturn(expectedResult);
+        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
         projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH);
 
@@ -117,7 +119,7 @@ class ProjectOutputTest {
         when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(authorRepository.findAllById(anyList())).thenReturn(List.of());
 
-        projectOutput.save(project, author);
+        projectOutput.save(project, null, author);
 
         verify(projectRepository).save(any(ProjectEntity.class));
     }
@@ -136,7 +138,7 @@ class ProjectOutputTest {
         when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(authorRepository.findAllById(anyList())).thenReturn(List.of());
 
-        projectOutput.save(project, author);
+        projectOutput.save(project, null, author);
 
         verify(projectRepository).save(argThat(e -> e.getSlug().equals("my-project-3")));
     }
@@ -150,7 +152,7 @@ class ProjectOutputTest {
         when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(authorRepository.findAllById(anyList())).thenReturn(List.of());
 
-        projectOutput.save(project, author);
+        projectOutput.save(project, null, author);
 
         verify(projectRepository).save(any(ProjectEntity.class));
     }
@@ -164,7 +166,7 @@ class ProjectOutputTest {
         when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(authorRepository.findAllById(anyList())).thenReturn(List.of());
 
-        projectOutput.save(project, author);
+        projectOutput.save(project, null, author);
 
         verify(projectRepository).save(any(ProjectEntity.class));
     }
@@ -183,7 +185,7 @@ class ProjectOutputTest {
         when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(authorRepository.findAllById(anyList())).thenReturn(List.of());
 
-        projectOutput.save(project, author);
+        projectOutput.save(project, null, author);
 
         verify(projectRepository).save(argThat(e ->
             e.getViewCount() == 0L &&
@@ -195,6 +197,28 @@ class ProjectOutputTest {
     }
 
     @Test
+    void save_withTagIds_resolvesTags() {
+        var translations = Map.of(Language.ENGLISH, projectContentModel);
+        when(project.translations()).thenReturn(translations);
+        when(projectContentModel.title()).thenReturn("Test");
+
+        var contentEntity = new ProjectContentEntity();
+        when(projectMapper.toContentEntity(projectContentModel)).thenReturn(contentEntity);
+
+        var tagIds = List.of(UUID.randomUUID());
+        when(tagRepository.findAllById(tagIds)).thenReturn(List.of());
+
+        when(projectRepository.countBySlugAndIdNot(anyString(), isNull())).thenReturn(0L);
+        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+        when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(authorRepository.findAllById(anyList())).thenReturn(List.of());
+
+        projectOutput.save(project, tagIds, author);
+
+        verify(tagRepository).findAllById(tagIds);
+    }
+
+    @Test
     void update_notFound_throwsNotFoundException() {
         var projectId = UUID.randomUUID();
         when(project.id()).thenReturn(projectId);
@@ -202,7 +226,7 @@ class ProjectOutputTest {
         when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class,
-                () -> projectOutput.update(project, author));
+                () -> projectOutput.update(project, null, author));
         assertEquals(ExceptionCode.PROJECT_NOT_FOUND, ex.getCode());
     }
 
@@ -225,7 +249,7 @@ class ProjectOutputTest {
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
         when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
-        projectOutput.update(project, author);
+        projectOutput.update(project, null, author);
 
         verify(existingContent).setTitle("New Title");
         verify(existingContent).setDescription("New Description");
@@ -254,7 +278,7 @@ class ProjectOutputTest {
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
         when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
-        projectOutput.update(project, author);
+        projectOutput.update(project, null, author);
 
         verify(newContent).setLanguage(Language.PORTUGUESE);
         verify(newContent).setProject(projectEntity);
@@ -281,7 +305,7 @@ class ProjectOutputTest {
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
         when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
-        projectOutput.update(project, author);
+        projectOutput.update(project, null, author);
 
         verify(projectEntity).setSlug("changed-title");
     }
@@ -304,7 +328,7 @@ class ProjectOutputTest {
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
         when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
-        projectOutput.update(project, author);
+        projectOutput.update(project, null, author);
 
         verify(projectEntity, never()).setSlug(anyString());
         verify(projectRepository, never()).countBySlugAndIdNot(anyString(), any());
@@ -331,7 +355,7 @@ class ProjectOutputTest {
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
         when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
-        projectOutput.update(project, author);
+        projectOutput.update(project, null, author);
 
         verify(projectRepository).findByIdWithAuthor(projectId, author.id(), false);
     }
@@ -360,12 +384,13 @@ class ProjectOutputTest {
     void search_withLanguage_returnsPaginatedResults() {
         Page<ProjectEntity> page = new PageImpl<>(List.of(projectEntity));
 
-        when(projectRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(projectMapper.toModel(eq(projectEntity), eq(Language.ENGLISH))).thenReturn(expectedResult);
+        when(projectMapper.toModel(eq(projectEntity))).thenReturn(expectedResult);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(Language.ENGLISH);
+        when(queryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
@@ -379,88 +404,93 @@ class ProjectOutputTest {
     void search_nullLanguage_passesNullToRepository() {
         Page<ProjectEntity> page = new PageImpl<>(List.of());
 
-        when(projectRepository.search(any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(projectRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(null);
+        when(queryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
         projectOutput.search(input, null);
 
-        verify(projectRepository).search(isNull(), isNull(), isNull(), eq(false), any(PageRequest.class), anyString());
+        verify(projectRepository).search(isNull(), isNull(), isNull(), isNull(), eq(false), any(PageRequest.class), anyString());
     }
 
     @Test
     void search_viewCountSort_mapsCorrectly() {
         Page<ProjectEntity> page = new PageImpl<>(List.of());
-        when(projectRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(Language.ENGLISH);
+        when(queryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "viewCount", Sort.Direction.ASC);
 
         projectOutput.search(input, author);
 
-        verify(projectRepository).search(any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("view_count ASC"));
+        verify(projectRepository).search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("view_count ASC"));
     }
 
     @Test
     void search_unknownField_defaultsToCreatedAtSort() {
         Page<ProjectEntity> page = new PageImpl<>(List.of());
-        when(projectRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(Language.ENGLISH);
+        when(queryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "unknownField", Sort.Direction.DESC);
 
         projectOutput.search(input, author);
 
-        verify(projectRepository).search(any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("created_at DESC, updated_at DESC"));
+        verify(projectRepository).search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("created_at DESC, updated_at DESC"));
     }
 
     @Test
     void search_slugSort_mapsCorrectly() {
         Page<ProjectEntity> page = new PageImpl<>(List.of());
-        when(projectRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(Language.ENGLISH);
+        when(queryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "slug", Sort.Direction.ASC);
 
         projectOutput.search(input, author);
 
-        verify(projectRepository).search(any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("slug ASC"));
+        verify(projectRepository).search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("slug ASC"));
     }
 
     @Test
     void search_reactionCountSort_mapsCorrectly() {
         Page<ProjectEntity> page = new PageImpl<>(List.of());
-        when(projectRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
 
         var queryModel = mock(ProjectQueryModel.class);
         when(queryModel.language()).thenReturn(Language.ENGLISH);
+        when(queryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "reactionCount", Sort.Direction.DESC);
 
         projectOutput.search(input, author);
 
-        verify(projectRepository).search(any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("reaction_count DESC"));
+        verify(projectRepository).search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("reaction_count DESC"));
     }
 
     @Test
     void findAllById_withIds_returnsMappedResults() {
         var ids = List.of(UUID.randomUUID());
         when(projectRepository.findAllById(ids)).thenReturn(List.of(projectEntity));
-        when(projectMapper.toModel(projectEntity, Language.ENGLISH)).thenReturn(expectedResult);
+        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
         var result = projectOutput.findAllById(ids, Language.ENGLISH);
 
@@ -499,5 +529,274 @@ class ProjectOutputTest {
         var result = projectOutput.findAllById(null);
 
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void search_filtersContentsToRequestedLanguage() {
+        var enContent = new ProjectContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setDescription("English Desc");
+
+        var ptContent = new ProjectContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setDescription("Descricao");
+
+        var entity = new ProjectEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent, ptContent)));
+        entity.setTags(new ArrayList<>());
+
+        Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+
+        var queryModel = mock(ProjectQueryModel.class);
+        when(queryModel.language()).thenReturn(Language.PORTUGUESE);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        projectOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
+        verify(projectMapper).toModel(captor.capture());
+        var filtered = captor.getValue();
+        assertEquals(1, filtered.getContents().size());
+        assertEquals(Language.PORTUGUESE, filtered.getContents().getFirst().getLanguage());
+    }
+
+    @Test
+    void search_fallsBackToEnglishWhenLanguageNotFound() {
+        var enContent = new ProjectContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setDescription("English Desc");
+
+        var entity = new ProjectEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent)));
+        entity.setTags(new ArrayList<>());
+
+        Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+
+        var queryModel = mock(ProjectQueryModel.class);
+        when(queryModel.language()).thenReturn(Language.PORTUGUESE);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        projectOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
+        verify(projectMapper).toModel(captor.capture());
+        var filtered = captor.getValue();
+        assertEquals(1, filtered.getContents().size());
+        assertEquals(Language.ENGLISH, filtered.getContents().getFirst().getLanguage());
+    }
+
+    @Test
+    void search_fallsBackToFirstAvailableWhenEnglishNotFound() {
+        var ptContent = new ProjectContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setDescription("Descricao");
+
+        var entity = new ProjectEntity();
+        entity.setContents(new ArrayList<>(List.of(ptContent)));
+        entity.setTags(new ArrayList<>());
+
+        Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+
+        var queryModel = mock(ProjectQueryModel.class);
+        when(queryModel.language()).thenReturn(Language.ENGLISH);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        projectOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
+        verify(projectMapper).toModel(captor.capture());
+        var filtered = captor.getValue();
+        assertEquals(1, filtered.getContents().size());
+        assertEquals(Language.PORTUGUESE, filtered.getContents().getFirst().getLanguage());
+    }
+
+    @Test
+    void search_nullLanguage_keepsAllTranslations() {
+        var enContent = new ProjectContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setDescription("English Desc");
+
+        var ptContent = new ProjectContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setDescription("Descricao");
+
+        var entity = new ProjectEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent, ptContent)));
+        entity.setTags(new ArrayList<>());
+
+        Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
+        when(projectRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+
+        var queryModel = mock(ProjectQueryModel.class);
+        when(queryModel.language()).thenReturn(null);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        projectOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
+        verify(projectMapper).toModel(captor.capture());
+        var filtered = captor.getValue();
+        assertEquals(2, filtered.getContents().size());
+    }
+
+    @Test
+    void search_filtersTagContentsToRequestedLanguage() {
+        var tagEnContent = new TagContentEntity();
+        tagEnContent.setLanguage(Language.ENGLISH);
+        tagEnContent.setName("Java");
+
+        var tagPtContent = new TagContentEntity();
+        tagPtContent.setLanguage(Language.PORTUGUESE);
+        tagPtContent.setName("Java PT");
+
+        var tag = new TagEntity();
+        tag.setContents(new ArrayList<>(List.of(tagEnContent, tagPtContent)));
+
+        var enContent = new ProjectContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("Title");
+        enContent.setDescription("Desc");
+
+        var entity = new ProjectEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent)));
+        entity.setTags(new ArrayList<>(List.of(tag)));
+
+        Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+
+        var queryModel = mock(ProjectQueryModel.class);
+        when(queryModel.language()).thenReturn(Language.PORTUGUESE);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        projectOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
+        verify(projectMapper).toModel(captor.capture());
+        var filteredTag = captor.getValue().getTags().getFirst();
+        assertEquals(1, filteredTag.getContents().size());
+        assertEquals(Language.PORTUGUESE, filteredTag.getContents().getFirst().getLanguage());
+    }
+
+    @Test
+    void search_nullLanguage_keepsAllTagTranslations() {
+        var tagEnContent = new TagContentEntity();
+        tagEnContent.setLanguage(Language.ENGLISH);
+        tagEnContent.setName("Java");
+
+        var tagPtContent = new TagContentEntity();
+        tagPtContent.setLanguage(Language.PORTUGUESE);
+        tagPtContent.setName("Java PT");
+
+        var tag = new TagEntity();
+        tag.setContents(new ArrayList<>(List.of(tagEnContent, tagPtContent)));
+
+        var enContent = new ProjectContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("Title");
+        enContent.setDescription("Desc");
+
+        var entity = new ProjectEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent)));
+        entity.setTags(new ArrayList<>(List.of(tag)));
+
+        Page<ProjectEntity> page = new PageImpl<>(List.of(entity));
+        when(projectRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+
+        var queryModel = mock(ProjectQueryModel.class);
+        when(queryModel.language()).thenReturn(null);
+        when(queryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        projectOutput.search(input, null);
+
+        var captor = ArgumentCaptor.forClass(ProjectEntity.class);
+        verify(projectMapper).toModel(captor.capture());
+        var filteredTag = captor.getValue().getTags().getFirst();
+        assertEquals(2, filteredTag.getContents().size());
+    }
+
+    @Test
+    void findBySlugAndIncrementView_filtersContentsToRequestedLanguage() {
+        var enContent = new ProjectContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setDescription("English Desc");
+
+        var ptContent = new ProjectContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setDescription("Descricao");
+
+        var entity = new ProjectEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent, ptContent)));
+        entity.setTags(new ArrayList<>());
+        entity.setViewCount(0L);
+
+        when(projectRepository.findBySlugAndLanguage("my-project", Language.PORTUGUESE)).thenReturn(Optional.of(entity));
+        when(projectRepository.save(entity)).thenReturn(entity);
+        when(projectMapper.toModel(entity)).thenReturn(expectedResult);
+
+        projectOutput.findBySlugAndIncrementView("my-project", Language.PORTUGUESE);
+
+        assertEquals(1, entity.getContents().size());
+        assertEquals(Language.PORTUGUESE, entity.getContents().getFirst().getLanguage());
+    }
+
+    @Test
+    void findAllByIdWithLanguage_filtersContents() {
+        var enContent = new ProjectContentEntity();
+        enContent.setLanguage(Language.ENGLISH);
+        enContent.setTitle("English Title");
+        enContent.setDescription("English Desc");
+
+        var ptContent = new ProjectContentEntity();
+        ptContent.setLanguage(Language.PORTUGUESE);
+        ptContent.setTitle("Titulo");
+        ptContent.setDescription("Descricao");
+
+        var entity = new ProjectEntity();
+        entity.setContents(new ArrayList<>(List.of(enContent, ptContent)));
+        entity.setTags(new ArrayList<>());
+
+        var ids = List.of(UUID.randomUUID());
+        when(projectRepository.findAllById(ids)).thenReturn(List.of(entity));
+        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+
+        projectOutput.findAllById(ids, Language.PORTUGUESE);
+
+        assertEquals(1, entity.getContents().size());
+        assertEquals(Language.PORTUGUESE, entity.getContents().getFirst().getLanguage());
     }
 }
