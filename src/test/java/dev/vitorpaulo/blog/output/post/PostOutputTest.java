@@ -11,7 +11,10 @@ import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
 import dev.vitorpaulo.blog.output.mapper.ProjectMapper;
 import dev.vitorpaulo.blog.output.mapper.TagMapper;
+import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
+import dev.vitorpaulo.blog.repository.ProjectRepository;
+import dev.vitorpaulo.blog.repository.TagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +39,9 @@ class PostOutputTest {
     @Mock private PostOutputMapper postOutputMapper;
     @Mock private TagMapper tagMapper;
     @Mock private ProjectMapper projectMapper;
+    @Mock private AuthorRepository authorRepository;
+    @Mock private TagRepository tagRepository;
+    @Mock private ProjectRepository projectRepository;
     @Mock private PostModel post;
     @Mock private AuthorModel author;
     @Mock private PostEntity postEntity;
@@ -53,6 +59,8 @@ class PostOutputTest {
     void setUp() {
         lenient().when(author.id()).thenReturn(UUID.randomUUID());
         lenient().when(author.role()).thenReturn("org:admin");
+        lenient().when(postRepository.findProjectIdsByPostId(any())).thenReturn(List.of());
+        lenient().when(postRepository.findProjectIdsByPostIds(any())).thenReturn(List.of());
     }
 
     @Test
@@ -60,7 +68,7 @@ class PostOutputTest {
         var entityId = UUID.randomUUID();
 
         when(postRepository.findById(entityId)).thenReturn(Optional.of(postEntity));
-        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         var result = postOutput.findById(entityId);
 
@@ -80,7 +88,7 @@ class PostOutputTest {
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getViewCount()).thenReturn(5L);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(postEntity, Language.ENGLISH)).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
 
         var result = postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
 
@@ -94,7 +102,7 @@ class PostOutputTest {
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getViewCount()).thenReturn(null);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(postEntity, Language.ENGLISH)).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
 
         postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
 
@@ -134,10 +142,9 @@ class PostOutputTest {
         when(postContentModel.content()).thenReturn("Some content here");
 
         when(postOutputMapper.toContentEntity(postContentModel)).thenReturn(postContentEntity);
-        when(postOutputMapper.toAuthorEntity(author)).thenReturn(authorEntity);
 
         when(postRepository.countBySlugAndIdNot(anyString(), isNull())).thenReturn(0L);
-        when(postOutputMapper.toModel(any(PostEntity.class))).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
         when(postRepository.save(any(PostEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         postOutput.save(post, null, null, author);
@@ -154,10 +161,9 @@ class PostOutputTest {
         when(postContentModel.content()).thenReturn("Content");
 
         when(postOutputMapper.toContentEntity(postContentModel)).thenReturn(postContentEntity);
-        when(postOutputMapper.toAuthorEntity(author)).thenReturn(authorEntity);
 
         when(postRepository.countBySlugAndIdNot("my-title", null)).thenReturn(2L);
-        when(postOutputMapper.toModel(any(PostEntity.class))).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(any(PostEntity.class), anyList())).thenReturn(expectedResult);
         when(postRepository.save(any(PostEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         postOutput.save(post, null, null, author);
@@ -204,7 +210,7 @@ class PostOutputTest {
 
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         postOutput.update(post, null, null, author);
 
@@ -233,7 +239,7 @@ class PostOutputTest {
 
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         postOutput.update(post, null, null, author);
 
@@ -261,7 +267,7 @@ class PostOutputTest {
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.countBySlugAndIdNot("changed-title", postId)).thenReturn(0L);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         postOutput.update(post, null, null, author);
 
@@ -285,7 +291,7 @@ class PostOutputTest {
 
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(postEntity)).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         postOutput.update(post, null, null, author);
 
@@ -320,7 +326,7 @@ class PostOutputTest {
 
         when(postRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(postEntity, Language.ENGLISH)).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
 
         var input = new PaginatedInput<>(postQueryModel, 0, 10, "createdAt", Sort.Direction.DESC);
@@ -343,7 +349,7 @@ class PostOutputTest {
 
         postOutput.search(input, null);
 
-        verify(postRepository).search(isNull(), isNull(), isNull(), eq(true), any(PageRequest.class), anyString());
+        verify(postRepository).search(isNull(), isNull(), isNull(), eq(false), any(PageRequest.class), anyString());
     }
 
     @Test

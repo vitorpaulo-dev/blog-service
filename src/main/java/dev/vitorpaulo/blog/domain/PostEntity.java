@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.Formula;
 
 import java.time.OffsetDateTime;
@@ -36,12 +37,13 @@ public class PostEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private PostStatus status;
+    private PostStatus status = PostStatus.DRAFT;
 
     @Column(name = "estimated_reading")
     private Long estimatedReading;
 
     @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @BatchSize(size = 50)
     @Builder.Default
     private List<PostContentEntity> contents = new ArrayList<>();
 
@@ -61,7 +63,7 @@ public class PostEntity {
     )
     private List<TagEntity> tags;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany
     @JoinTable(
             name = "post_project",
             joinColumns = @JoinColumn(name = "post_id"),

@@ -41,6 +41,11 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.GET, "/v1/post/slug/**").permitAll()
 				.requestMatchers(HttpMethod.POST, "/v1/post/search").permitAll()
 				.requestMatchers(HttpMethod.GET, "/v1/post/*").authenticated()
+				.requestMatchers(HttpMethod.GET, "/v1/project/slug/**").permitAll()
+				.requestMatchers(HttpMethod.POST, "/v1/project/search").permitAll()
+				.requestMatchers(HttpMethod.POST, "/v1/project/batch").permitAll()
+				.requestMatchers(HttpMethod.GET, "/v1/project/*").authenticated()
+				.requestMatchers(HttpMethod.POST, "/v1/upload").authenticated()
 				.anyRequest().permitAll()
 			)
 			.oauth2ResourceServer(oauth2 -> oauth2
@@ -52,14 +57,12 @@ public class SecurityConfig {
 
 	@Bean
 	public JwtAuthenticationConverter jwtAuthenticationConverter() {
-		// Default converter handles scope/scp -> SCOPE_* authorities
 		JwtGrantedAuthoritiesConverter scopeConverter = new JwtGrantedAuthoritiesConverter();
 
 		JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
 		converter.setJwtGrantedAuthoritiesConverter(jwt -> {
 			Collection<GrantedAuthority> authorities = new ArrayList<>();
 
-			// Primary org_role claim -> ROLE_* (Clerk organization role)
 			Object orgRole = jwt.getClaim("org_role");
 			if (orgRole instanceof String stringClaim) {
 				authorities.add(new SimpleGrantedAuthority("ROLE_" + stringClaim.toUpperCase()));
@@ -71,7 +74,6 @@ public class SecurityConfig {
 				}
 			}
 
-			// Merge scope authorities (SCOPE_*) without duplication
 			Collection<GrantedAuthority> scopeAuthorities = scopeConverter.convert(jwt);
 			if (scopeAuthorities != null) {
 				for (GrantedAuthority ga : scopeAuthorities) {

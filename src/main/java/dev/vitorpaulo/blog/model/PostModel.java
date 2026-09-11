@@ -15,7 +15,7 @@ public record PostModel(
         OffsetDateTime updatedAt,
         List<AuthorModel> authors,
         List<TagModel> tags,
-        List<ProjectModel> projects,
+        List<UUID> projectIds,
         Long viewCount,
         Long loveCount,
         Long celebrateCount,

@@ -18,6 +18,8 @@ public class TagOutput {
 
     public List<TagModel> findAllById(List<UUID> ids) {
         if (ids == null || ids.isEmpty()) return List.of();
-        return tagRepository.findAllById(ids).stream().map(tagMapper::toModel).toList();
+        return tagRepository.findAllById(ids).stream()
+            .map(tagMapper::toModel)
+            .toList();
     }
 }

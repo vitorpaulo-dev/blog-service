@@ -17,7 +17,7 @@ public record PostResponse(
         OffsetDateTime updatedAt,
         List<AuthorResponse> authors,
         List<TagResponse> tags,
-        List<ProjectResponse> projects,
+        List<UUID> projectIds,
         Long viewCount,
         Long loveCount,
         Long celebrateCount,

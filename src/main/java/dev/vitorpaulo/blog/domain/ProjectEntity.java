@@ -1,17 +1,18 @@
 package dev.vitorpaulo.blog.domain;
 
+import dev.vitorpaulo.blog.model.ProjectStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.Formula;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -37,27 +38,60 @@ public class ProjectEntity {
     @Column(name = "programming_language")
     private String programmingLanguage;
 
+    @Column(name = "banner_url")
+    private String bannerUrl;
+
+    @Column(name = "github_url")
+    private String githubUrl;
+
+    @Column(name = "website_url")
+    private String websiteUrl;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private String status;
+    private ProjectStatus status = ProjectStatus.DRAFT;
 
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @BatchSize(size = 50)
     @Builder.Default
     private List<ProjectContentEntity> contents = new ArrayList<>();
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "project_author",
             joinColumns = @JoinColumn(name = "project_id"),
             inverseJoinColumns = @JoinColumn(name = "author_id")
     )
-    @Builder.Default
-    private Set<AuthorEntity> authors = new HashSet<>();
+    private List<AuthorEntity> authors;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime updatedAt;
+
+    @Column(name = "view_count", nullable = false)
+    private Long viewCount;
+
+    @Column(name = "love_count", nullable = false)
+    private Long loveCount;
+
+    @Column(name = "celebrate_count", nullable = false)
+    private Long celebrateCount;
+
+    @Column(name = "genius_count", nullable = false)
+    private Long geniusCount;
+
+    @Column(name = "help_count", nullable = false)
+    private Long helpCount;
+
+    @Formula("""
+        love_count
+        + celebrate_count
+        + genius_count
+        + help_count
+    """)
+    private Integer reactionCount;
 
     @PrePersist
     void onCreate() {

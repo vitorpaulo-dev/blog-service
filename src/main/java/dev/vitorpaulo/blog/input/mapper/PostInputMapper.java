@@ -33,7 +33,7 @@ public interface PostInputMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "authors", ignore = true)
     @Mapping(target = "tags", ignore = true)
-    @Mapping(target = "projects", ignore = true)
+    @Mapping(target = "projectIds", ignore = true)
     @Mapping(target = "viewCount", ignore = true)
     @Mapping(target = "loveCount", ignore = true)
     @Mapping(target = "celebrateCount", ignore = true)
@@ -49,7 +49,7 @@ public interface PostInputMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "authors", ignore = true)
     @Mapping(target = "tags", ignore = true)
-    @Mapping(target = "projects", ignore = true)
+    @Mapping(target = "projectIds", ignore = true)
     @Mapping(target = "viewCount", ignore = true)
     @Mapping(target = "loveCount", ignore = true)
     @Mapping(target = "celebrateCount", ignore = true)
@@ -72,7 +72,7 @@ public interface PostInputMapper {
             post.updatedAt(),
             post.authors() != null ? post.authors().stream().map(this::toAuthorResponse).toList() : List.of(),
             post.tags() != null ? post.tags().stream().map(this::toTagResponse).toList() : List.of(),
-            post.projects() != null ? post.projects().stream().map(this::toProjectResponse).toList() : List.of(),
+            post.projectIds() != null ? post.projectIds() : List.of(),
             post.viewCount(),
             post.loveCount(),
             post.celebrateCount(),
@@ -129,7 +129,24 @@ public interface PostInputMapper {
             ))
             : Map.<Language, ProjectContentResponse>of();
         return new dev.vitorpaulo.blog.input.response.ProjectResponse(
-            model.id(), model.slug(), model.logoUrl(), model.programmingLanguage(), contentMap
+            model.id(),
+            model.slug(),
+            model.logoUrl(),
+            model.programmingLanguage(),
+            model.bannerUrl(),
+            model.githubUrl(),
+            model.websiteUrl(),
+            model.status() != null ? model.status().name() : null,
+            model.createdAt(),
+            model.updatedAt(),
+            model.authors() != null ? model.authors().stream().map(this::toAuthorResponse).toList() : List.of(),
+            model.viewCount(),
+            model.loveCount(),
+            model.celebrateCount(),
+            model.geniusCount(),
+            model.helpCount(),
+            model.reactionCount(),
+            contentMap
         );
     }
 

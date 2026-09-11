@@ -1,6 +1,7 @@
 package dev.vitorpaulo.blog.repository;
 
 import dev.vitorpaulo.blog.domain.PostEntity;
+import dev.vitorpaulo.blog.model.Language;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,9 +18,13 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
     @Query("""
         SELECT p FROM PostEntity p
         JOIN p.contents c
-        WHERE p.slug = :slug AND c.language = :language
+        WHERE p.slug = :slug
+	  AND c.id = COALESCE(
+		  (SELECT pc.id FROM PostContentEntity pc WHERE pc.post = p AND pc.language = :language),
+		  (SELECT pc2.id FROM PostContentEntity pc2 WHERE pc2.post = p ORDER BY pc2.language LIMIT 1)
+	  )
     """)
-    Optional<PostEntity> findBySlugAndLanguage(@Param("slug") String slug, @Param("language") dev.vitorpaulo.blog.model.Language language);
+    Optional<PostEntity> findBySlugAndLanguage(String slug, Language language);
 
     long countBySlugAndIdNot(String slug, UUID id);
 
@@ -27,7 +32,10 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
         value = """
         SELECT p.*, (p.love_count + p.celebrate_count + p.genius_count + p.help_count) as reactionCount
         FROM post p
-        JOIN post_content pc ON pc.post_id = p.id AND pc.language = :language
+        JOIN post_content pc ON pc.post_id = p.id AND pc.id = COALESCE(
+            (SELECT pc2.id FROM post_content pc2 WHERE pc2.post_id = p.id AND pc2.language = :language),
+            (SELECT pc3.id FROM post_content pc3 WHERE pc3.post_id = p.id ORDER BY pc3.language LIMIT 1)
+        )
         WHERE
             (
                 p.status = 'PUBLISHED'
@@ -62,7 +70,10 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
         countQuery = """
         SELECT COUNT(*)
         FROM post p
-        JOIN post_content pc ON pc.post_id = p.id AND pc.language = :language
+        JOIN post_content pc ON pc.post_id = p.id AND pc.id = COALESCE(
+            (SELECT pc2.id FROM post_content pc2 WHERE pc2.post_id = p.id AND pc2.language = :language),
+            (SELECT pc3.id FROM post_content pc3 WHERE pc3.post_id = p.id ORDER BY pc3.language LIMIT 1)
+        )
         WHERE
             (
                 p.status = 'PUBLISHED'
@@ -124,4 +135,10 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
           )
     """)
     Optional<PostEntity> findByIdWithAuthor(UUID id, UUID author, Boolean bypass);
+
+    @Query("SELECT pj.id FROM PostEntity p JOIN p.projects pj WHERE p.id = :postId")
+    List<UUID> findProjectIdsByPostId(@Param("postId") UUID postId);
+
+    @Query("SELECT p.id, pj.id FROM PostEntity p JOIN p.projects pj WHERE p.id IN :postIds")
+    List<Object[]> findProjectIdsByPostIds(@Param("postIds") List<UUID> postIds);
 }

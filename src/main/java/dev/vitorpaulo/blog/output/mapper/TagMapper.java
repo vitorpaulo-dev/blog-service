@@ -15,8 +15,6 @@ import java.util.stream.Collectors;
 @Mapper(componentModel = "spring")
 public interface TagMapper {
 
-    // ── Entity → Model ──
-
     @Mapping(target = "translations", expression = "java(contentsToTranslations(entity.getContents()))")
     TagModel toModel(TagEntity entity);
 
@@ -30,12 +28,8 @@ public interface TagMapper {
         ));
     }
 
-    // ── Model → Entity ──
-
     @Mapping(target = "contents", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     TagEntity toEntity(TagModel model);
-
-    List<TagEntity> toEntityList(List<TagModel> models);
 }
