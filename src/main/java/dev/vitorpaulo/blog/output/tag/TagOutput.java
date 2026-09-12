@@ -106,7 +106,7 @@ public class TagOutput {
 
     @Transactional(readOnly = true)
     public List<TagModel> findAllById(List<UUID> ids, Language language) {
-        return tagRepository.findWithSingleContent(ids, language).stream()
+        return tagRepository.findWithSingleContent(ids).stream()
             .map(tagOutputMapper::toModel)
 			.peek(post -> {
 				final var contents = post.translations();

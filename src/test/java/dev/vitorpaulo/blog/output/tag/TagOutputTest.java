@@ -59,7 +59,7 @@ class TagOutputTest {
     void findAllById_withIds_usesFindWithSingleContent() {
         var id1 = UUID.randomUUID();
         var id2 = UUID.randomUUID();
-        when(tagRepository.findWithSingleContent(List.of(id1, id2), Language.PORTUGUESE))
+        when(tagRepository.findWithSingleContent(List.of(id1, id2)))
                 .thenReturn(List.of(tagEntity, secondTagEntity));
         when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
         when(tagOutputMapper.toModel(secondTagEntity)).thenReturn(secondResult);
@@ -92,7 +92,7 @@ class TagOutputTest {
         var translations = new HashMap<Language, dev.vitorpaulo.blog.model.TagContentModel>();
         translations.put(Language.ENGLISH, null);
         translations.put(Language.PORTUGUESE, null);
-        when(tagRepository.findWithSingleContent(anyList(), eq(Language.PORTUGUESE))).thenReturn(List.of(tagEntity));
+        when(tagRepository.findWithSingleContent(anyList())).thenReturn(List.of(tagEntity));
         when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
         when(expectedResult.translations()).thenReturn(translations);
 

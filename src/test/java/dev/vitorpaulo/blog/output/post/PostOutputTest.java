@@ -143,8 +143,6 @@ class PostOutputTest {
         verify(postRepository).save(any(PostEntity.class));
     }
 
-    // Committed behavior: PostOutput.generateUniqueSlug concatenates the counter as a
-    // string ("my-title-" + 2 + 1 -> "my-title-21"). Suspected production bug, reported.
     @Test
     void save_slugConflict_appendsCounterToSlug() {
         when(post.translations()).thenReturn(Map.of(Language.ENGLISH, postContentModel));
@@ -156,7 +154,7 @@ class PostOutputTest {
 
         postOutput.save(post, null, null, author);
 
-        verify(postRepository).save(argThat(e -> "my-title-21".equals(e.getSlug())));
+        verify(postRepository).save(argThat(e -> "my-title-3".equals(e.getSlug())));
     }
 
     @Test

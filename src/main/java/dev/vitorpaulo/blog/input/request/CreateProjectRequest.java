@@ -13,7 +13,7 @@ public record CreateProjectRequest(
     @Size(max = 1024) String bannerUrl,
     @Size(max = 1024) String githubUrl,
     @Size(max = 1024) String websiteUrl,
-    List<UUID> tagIds,
+    @Size(max = 3) List<UUID> tagIds,
     @NotEmpty Map<Language, ProjectContentRequest> translations,
     String status
 ) {}

@@ -26,12 +26,8 @@ public interface TagRepository extends JpaRepository<TagEntity, UUID> {
 		JOIN t.contents c
 		WHERE t.id IN :ids
 		ORDER BY t.slug
-		LIMIT 10
 	""")
-	List<TagEntity> findWithSingleContent(
-		List<UUID> ids,
-		Language language
-	);
+	List<TagEntity> findWithSingleContent(List<UUID> ids);
 
     long countBySlugAndIdNot(String slug, UUID id);
 

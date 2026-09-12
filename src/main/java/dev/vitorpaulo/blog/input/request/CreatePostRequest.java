@@ -12,7 +12,7 @@ import java.util.UUID;
 public record CreatePostRequest(
         @Size(max = 1024) String bannerUrl,
         @NotNull @NotEmpty Map<Language, PostContentRequest> translations,
-        List<UUID> tagIds,
+        @Size(max = 3) List<UUID> tagIds,
         List<UUID> projectIds,
         String status
 ) {}

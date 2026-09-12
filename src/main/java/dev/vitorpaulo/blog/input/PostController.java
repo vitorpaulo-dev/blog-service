@@ -6,7 +6,6 @@ import dev.vitorpaulo.blog.input.mapper.PostInputMapper;
 import dev.vitorpaulo.blog.input.request.CreatePostRequest;
 import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
 import dev.vitorpaulo.blog.common.dto.GenericPageableRequest;
-import dev.vitorpaulo.blog.input.request.PostBatchRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
 import dev.vitorpaulo.blog.input.response.PostResponse;

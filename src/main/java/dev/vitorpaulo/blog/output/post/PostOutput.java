@@ -206,6 +206,6 @@ public class PostOutput {
         final var base = PostUtils.slugify(title);
         final var counter = postRepository.countBySlugAndIdNot(base, currentId);
         if (counter == 0) return base;
-        return base + "-" + counter + 1;
+        return base + "-" + (counter + 1);
     }
 }
