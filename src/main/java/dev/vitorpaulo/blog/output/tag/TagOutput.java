@@ -5,7 +5,7 @@ import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.common.util.PostUtils;
 import dev.vitorpaulo.blog.domain.TagContentEntity;
 import dev.vitorpaulo.blog.domain.TagEntity;
-import dev.vitorpaulo.blog.output.mapper.TagMapper;
+import dev.vitorpaulo.blog.output.mapper.TagOutputMapper;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.TagContentModel;
 import dev.vitorpaulo.blog.model.TagModel;
@@ -29,17 +29,18 @@ import java.util.stream.Collectors;
 public class TagOutput {
 
     private final TagRepository tagRepository;
-    private final TagMapper tagMapper;
+    private final TagOutputMapper tagOutputMapper;
 
+    @Transactional(readOnly = true)
     public TagModel findById(UUID id) {
-        return tagRepository.findById(id)
-            .map(tagMapper::toModel)
+        return tagRepository.findByIdWithContents(id)
+            .map(tagOutputMapper::toModel)
             .orElseThrow(() -> new NotFoundException(ExceptionCode.TAG_NOT_FOUND));
     }
 
     public TagModel findBySlug(String slug, Language language) {
         return tagRepository.findBySlugAndLanguage(slug, language)
-            .map(entity -> tagMapper.toModel(entity, language))
+            .map(tagOutputMapper::toModel)
             .orElseThrow(() -> new NotFoundException(ExceptionCode.TAG_NOT_FOUND));
     }
 
@@ -49,12 +50,12 @@ public class TagOutput {
         final var slug = generateUniqueSlug(firstContent.name(), null);
 
         final var entity = new TagEntity();
-        tagMapper.updateEntity(tag, entity);
+        tagOutputMapper.updateEntity(tag, entity);
         entity.setSlug(slug);
 
         syncContents(entity, tag.translations());
 
-        return tagMapper.toModel(tagRepository.save(entity));
+        return tagOutputMapper.toModel(tagRepository.save(entity));
     }
 
     @Transactional
@@ -67,14 +68,14 @@ public class TagOutput {
         final var nameChanged = firstContent.name() != null
             && !firstContent.name().equalsIgnoreCase(previousName);
 
-        tagMapper.updateEntity(tag, entity);
+        tagOutputMapper.updateEntity(tag, entity);
         if (nameChanged) {
             entity.setSlug(generateUniqueSlug(firstContent.name(), entity.getId()));
         }
 
         syncContents(entity, tag.translations());
 
-        return tagMapper.toModel(tagRepository.save(entity));
+        return tagOutputMapper.toModel(tagRepository.save(entity));
     }
 
     @Transactional
@@ -83,14 +84,19 @@ public class TagOutput {
     }
 
     public PaginatedOutput<TagModel> search(PaginatedInput<TagQueryModel> input, Language language) {
-        final var pageable = PageRequest.of(input.page(), input.size(),
-            Sort.by(input.direction(), mapSortProperty(input.sort())));
+        final var pageable = PageRequest.of(input.page(), input.size(), Sort.by(input.direction(), mapSortProperty(input.sort())));
         final var name = input.query() != null ? input.query().name() : null;
-        final var result = tagRepository.search(name, pageable)
-            .map(entity -> tagMapper.toModel(entity, language));
+        final var result = tagRepository.search(name, language, pageable);
 
         return new PaginatedOutput<>(
-            result.getContent(),
+            result.getContent().stream()
+				.map(tagOutputMapper::toModel)
+				.peek(post -> {
+					final var contents = post.translations();
+					if (contents.size() <= 1) return;
+
+					contents.keySet().removeIf(key -> key != language);
+				}).toList(),
             result.getNumber(),
             result.getSize(),
             result.getTotalElements(),
@@ -98,17 +104,16 @@ public class TagOutput {
         );
     }
 
-    public List<TagModel> findAllById(List<UUID> ids) {
-        if (ids == null || ids.isEmpty()) return List.of();
-        return tagRepository.findAllById(ids).stream()
-            .map(tagMapper::toModel)
-            .toList();
-    }
-
+    @Transactional(readOnly = true)
     public List<TagModel> findAllById(List<UUID> ids, Language language) {
-        if (ids == null || ids.isEmpty()) return List.of();
-        return tagRepository.findAllById(ids).stream()
-            .map(entity -> tagMapper.toModel(entity, language))
+        return tagRepository.findWithSingleContent(ids, language).stream()
+            .map(tagOutputMapper::toModel)
+			.peek(post -> {
+				final var contents = post.translations();
+				if (contents.size() <= 1) return;
+
+				contents.keySet().removeIf(key -> key != language);
+			})
             .toList();
     }
 
@@ -121,7 +126,7 @@ public class TagOutput {
             if (existing != null) {
                 existing.setName(model.name());
             } else {
-                final var content = tagMapper.toContentEntity(model);
+                final var content = tagOutputMapper.toContentEntity(model);
                 content.setLanguage(lang);
                 content.setTag(entity);
                 entity.getContents().add(content);
@@ -156,9 +161,8 @@ public class TagOutput {
 
     private String mapSortProperty(String sort) {
         return switch (sort != null ? sort : "") {
-            case "slug" -> "slug";
-            case "name" -> "slug";
-            default -> "created_at";
+            case "slug", "name" -> "slug";
+			default -> "created_at";
         };
     }
 }

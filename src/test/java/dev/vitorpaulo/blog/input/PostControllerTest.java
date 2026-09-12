@@ -6,12 +6,14 @@ import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.input.mapper.PostInputMapper;
 import dev.vitorpaulo.blog.input.request.CreatePostRequest;
 import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
+import dev.vitorpaulo.blog.input.request.PostBatchRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
 import dev.vitorpaulo.blog.input.response.PostResponse;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
+import dev.vitorpaulo.blog.output.post.PostOutput;
 import dev.vitorpaulo.blog.usecase.post.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +38,7 @@ class PostControllerTest {
     @Mock private GetPostBySlugUseCase getPostBySlugUseCase;
     @Mock private SearchPostUseCase searchPostUseCase;
     @Mock private PostInputMapper postInputMapper;
+    @Mock private PostOutput postOutput;
     @Mock private AuthorModel author;
     @Mock private PostModel postModel;
     @Mock private PostResponse postResponse;
@@ -127,5 +130,19 @@ class PostControllerTest {
         var result = postController.search(searchRequest, author);
 
         assertEquals(pageableResponse, result);
+    }
+
+    @Test
+    void batch_validRequest_returnsList() {
+        var ids = List.of(UUID.randomUUID());
+        var batchRequest = new PostBatchRequest(ids, Language.ENGLISH);
+        when(postOutput.findAllById(ids, Language.ENGLISH)).thenReturn(List.of(postModel));
+        when(postInputMapper.toResponse(postModel)).thenReturn(postResponse);
+
+        var result = postController.batch(batchRequest);
+
+        assertEquals(1, result.size());
+        assertEquals(postResponse, result.getFirst());
+        verify(postOutput).findAllById(ids, Language.ENGLISH);
     }
 }

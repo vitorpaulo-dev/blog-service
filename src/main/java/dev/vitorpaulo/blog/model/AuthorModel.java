@@ -1,6 +1,5 @@
 package dev.vitorpaulo.blog.model;
 
-import java.util.Map;
 import java.util.UUID;
 
 public record AuthorModel(
@@ -9,6 +8,5 @@ public record AuthorModel(
         String name,
         String slug,
         String avatarUrl,
-        String role,
-        Map<Language, AuthorContentModel> translations
+        String role
 ) {}

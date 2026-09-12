@@ -7,8 +7,8 @@ import dev.vitorpaulo.blog.domain.*;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
-import dev.vitorpaulo.blog.output.mapper.ProjectMapper;
-import dev.vitorpaulo.blog.output.mapper.TagMapper;
+import dev.vitorpaulo.blog.output.mapper.ProjectOutputMapper;
+import dev.vitorpaulo.blog.output.mapper.TagOutputMapper;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
@@ -16,7 +16,6 @@ import dev.vitorpaulo.blog.repository.TagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,6 +23,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
@@ -36,8 +36,8 @@ class PostOutputTest {
 
     @Mock private PostRepository postRepository;
     @Mock private PostOutputMapper postOutputMapper;
-    @Mock private TagMapper tagMapper;
-    @Mock private ProjectMapper projectMapper;
+    @Mock private TagOutputMapper tagOutputMapper;
+    @Mock private ProjectOutputMapper projectOutputMapper;
     @Mock private AuthorRepository authorRepository;
     @Mock private TagRepository tagRepository;
     @Mock private ProjectRepository projectRepository;
@@ -63,20 +63,22 @@ class PostOutputTest {
     }
 
     @Test
-    void findById_found_returnsPost() {
+    void findById_found_usesFindByIdWithContentsAndReturnsPost() {
         var entityId = UUID.randomUUID();
 
-        when(postRepository.findById(entityId)).thenReturn(Optional.of(postEntity));
+        when(postRepository.findByIdWithContents(entityId)).thenReturn(Optional.of(postEntity));
         when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         var result = postOutput.findById(entityId);
 
         assertEquals(expectedResult, result);
+        verify(postRepository).findByIdWithContents(entityId);
+        verify(postRepository, never()).findById(any());
     }
 
     @Test
     void findById_notFound_throwsNotFoundException() {
-        when(postRepository.findById(any())).thenReturn(Optional.empty());
+        when(postRepository.findByIdWithContents(any())).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class, () -> postOutput.findById(UUID.randomUUID()));
         assertEquals(ExceptionCode.POST_NOT_FOUND, ex.getCode());
@@ -87,13 +89,14 @@ class PostOutputTest {
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getViewCount()).thenReturn(5L);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         var result = postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
 
         verify(postEntity).setViewCount(6L);
         assertEquals(expectedResult, result);
         verify(postRepository).save(postEntity);
+        verify(postOutputMapper).toModel(eq(postEntity), anyList());
     }
 
     @Test
@@ -101,7 +104,7 @@ class PostOutputTest {
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getViewCount()).thenReturn(null);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
 
@@ -321,11 +324,15 @@ class PostOutputTest {
 
     @Test
     void search_withLanguage_returnsPaginatedResults() {
+        var entityId = UUID.randomUUID();
+        when(postEntity.getId()).thenReturn(entityId);
         Page<PostEntity> page = new PageImpl<>(List.of(postEntity));
 
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(eq(postEntity), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
+        when(postRepository.findAllByIdWithSingleContent(List.of(entityId), Language.ENGLISH))
+                .thenReturn(List.of(postEntity));
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
         when(postQueryModel.tagId()).thenReturn(null);
 
@@ -335,6 +342,25 @@ class PostOutputTest {
 
         assertNotNull(result);
         assertEquals(1, result.content().size());
+        verify(postRepository).findAllByIdWithSingleContent(List.of(entityId), Language.ENGLISH);
+    }
+
+    @Test
+    void search_emptyPage_skipsTranslationFetch() {
+        Page<PostEntity> page = new PageImpl<>(List.of());
+
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(page);
+        when(postQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(postQueryModel.tagId()).thenReturn(null);
+
+        var input = new PaginatedInput<>(postQueryModel, 0, 10, "createdAt", Sort.Direction.DESC);
+
+        var result = postOutput.search(input, null);
+
+        assertNotNull(result);
+        assertTrue(result.content().isEmpty());
+        verify(postRepository, never()).findAllByIdWithSingleContent(anyList(), any());
     }
 
     @Test
@@ -384,25 +410,16 @@ class PostOutputTest {
     }
 
     @Test
-    void search_filtersContentsToRequestedLanguage() {
-        var enContent = new PostContentEntity();
-        enContent.setLanguage(Language.ENGLISH);
-        enContent.setTitle("English Title");
-        enContent.setContent("English Content");
+    void search_withLanguage_fetchesSingleTranslationWithRequestedLanguage() {
+        var entityId = UUID.randomUUID();
+        when(postEntity.getId()).thenReturn(entityId);
+        Page<PostEntity> page = new PageImpl<>(List.of(postEntity));
 
-        var ptContent = new PostContentEntity();
-        ptContent.setLanguage(Language.PORTUGUESE);
-        ptContent.setTitle("Titulo Portugues");
-        ptContent.setContent("Conteudo Portugues");
-
-        var entity = new PostEntity();
-        entity.setContents(new ArrayList<>(List.of(enContent, ptContent)));
-        entity.setTags(new ArrayList<>());
-
-        Page<PostEntity> page = new PageImpl<>(List.of(entity));
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList())).thenReturn(expectedResult);
+        when(postRepository.findAllByIdWithSingleContent(List.of(entityId), Language.PORTUGUESE))
+                .thenReturn(List.of(postEntity));
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         var queryModel = mock(PostQueryModel.class);
         when(queryModel.language()).thenReturn(Language.PORTUGUESE);
@@ -412,53 +429,53 @@ class PostOutputTest {
 
         var result = postOutput.search(input, null);
 
-        assertNotNull(result);
-        verify(postOutputMapper).toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList());
+        assertEquals(List.of(expectedResult), result.content());
+        verify(postRepository).findAllByIdWithSingleContent(List.of(entityId), Language.PORTUGUESE);
+        verify(postOutputMapper).toModel(eq(postEntity), anyList());
     }
 
     @Test
-    void search_fallsBackToEnglishWhenLanguageNotFound() {
-        var enContent = new PostContentEntity();
-        enContent.setLanguage(Language.ENGLISH);
-        enContent.setTitle("English Title");
-        enContent.setContent("English Content");
+    void search_nullLanguage_fetchesWithNullLanguageForQueryFallback() {
+        var entityId = UUID.randomUUID();
+        when(postEntity.getId()).thenReturn(entityId);
+        Page<PostEntity> page = new PageImpl<>(List.of(postEntity));
 
-        var entity = new PostEntity();
-        entity.setContents(new ArrayList<>(List.of(enContent)));
-        entity.setTags(new ArrayList<>());
-
-        Page<PostEntity> page = new PageImpl<>(List.of(entity));
-        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+        when(postRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList())).thenReturn(expectedResult);
+        when(postRepository.findAllByIdWithSingleContent(List.of(entityId), null))
+                .thenReturn(List.of(postEntity));
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         var queryModel = mock(PostQueryModel.class);
-        when(queryModel.language()).thenReturn(Language.PORTUGUESE);
+        when(queryModel.language()).thenReturn(null);
         when(queryModel.tagId()).thenReturn(null);
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
         var result = postOutput.search(input, null);
 
-        assertNotNull(result);
-        verify(postOutputMapper).toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList());
+        assertEquals(List.of(expectedResult), result.content());
+        verify(postRepository).findAllByIdWithSingleContent(List.of(entityId), null);
     }
 
     @Test
-    void search_fallsBackToFirstAvailableWhenEnglishNotFound() {
-        var ptContent = new PostContentEntity();
-        ptContent.setLanguage(Language.PORTUGUESE);
-        ptContent.setTitle("Titulo");
-        ptContent.setContent("Conteudo");
+    void search_preservesPageOrderRegardlessOfFetchOrder() {
+        var idA = UUID.randomUUID();
+        var idB = UUID.randomUUID();
+        var entityA = new PostEntity();
+        entityA.setId(idA);
+        entityA.setTags(new ArrayList<>());
+        var entityB = new PostEntity();
+        entityB.setId(idB);
+        entityB.setTags(new ArrayList<>());
 
-        var entity = new PostEntity();
-        entity.setContents(new ArrayList<>(List.of(ptContent)));
-        entity.setTags(new ArrayList<>());
-
-        Page<PostEntity> page = new PageImpl<>(List.of(entity));
+        Page<PostEntity> page = new PageImpl<>(List.of(entityA, entityB));
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), eq(Language.ENGLISH), anyList())).thenReturn(expectedResult);
+        when(postRepository.findAllByIdWithSingleContent(List.of(idA, idB), Language.ENGLISH))
+                .thenReturn(List.of(entityB, entityA));
+        when(postOutputMapper.toModel(eq(entityA), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(entityB), anyList())).thenReturn(post);
 
         var queryModel = mock(PostQueryModel.class);
         when(queryModel.language()).thenReturn(Language.ENGLISH);
@@ -468,69 +485,20 @@ class PostOutputTest {
 
         var result = postOutput.search(input, null);
 
-        assertNotNull(result);
-        verify(postOutputMapper).toModel(any(PostEntity.class), eq(Language.ENGLISH), anyList());
+        assertEquals(List.of(expectedResult, post), result.content());
     }
 
     @Test
-    void search_nullLanguage_keepsAllTranslations() {
-        var enContent = new PostContentEntity();
-        enContent.setLanguage(Language.ENGLISH);
-        enContent.setTitle("English Title");
-        enContent.setContent("English Content");
+    void search_fetchesTagContentsForPagePostsWithRequestedLanguage() {
+        var entityId = UUID.randomUUID();
+        when(postEntity.getId()).thenReturn(entityId);
+        Page<PostEntity> page = new PageImpl<>(List.of(postEntity));
 
-        var ptContent = new PostContentEntity();
-        ptContent.setLanguage(Language.PORTUGUESE);
-        ptContent.setTitle("Titulo");
-        ptContent.setContent("Conteudo");
-
-        var entity = new PostEntity();
-        entity.setContents(new ArrayList<>(List.of(enContent, ptContent)));
-        entity.setTags(new ArrayList<>());
-
-        Page<PostEntity> page = new PageImpl<>(List.of(entity));
-        when(postRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
-                .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), isNull(), anyList())).thenReturn(expectedResult);
-
-        var queryModel = mock(PostQueryModel.class);
-        when(queryModel.language()).thenReturn(null);
-        when(queryModel.tagId()).thenReturn(null);
-
-        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
-
-        var result = postOutput.search(input, null);
-
-        assertNotNull(result);
-        verify(postOutputMapper).toModel(any(PostEntity.class), isNull(), anyList());
-    }
-
-    @Test
-    void search_filtersTagContentsToRequestedLanguage() {
-        var tagEnContent = new TagContentEntity();
-        tagEnContent.setLanguage(Language.ENGLISH);
-        tagEnContent.setName("Java");
-
-        var tagPtContent = new TagContentEntity();
-        tagPtContent.setLanguage(Language.PORTUGUESE);
-        tagPtContent.setName("Java PT");
-
-        var tag = new TagEntity();
-        tag.setContents(new ArrayList<>(List.of(tagEnContent, tagPtContent)));
-
-        var enContent = new PostContentEntity();
-        enContent.setLanguage(Language.ENGLISH);
-        enContent.setTitle("Title");
-        enContent.setContent("Content");
-
-        var entity = new PostEntity();
-        entity.setContents(new ArrayList<>(List.of(enContent)));
-        entity.setTags(new ArrayList<>(List.of(tag)));
-
-        Page<PostEntity> page = new PageImpl<>(List.of(entity));
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList())).thenReturn(expectedResult);
+        when(postRepository.findAllByIdWithSingleContent(List.of(entityId), Language.PORTUGUESE))
+                .thenReturn(List.of(postEntity));
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         var queryModel = mock(PostQueryModel.class);
         when(queryModel.language()).thenReturn(Language.PORTUGUESE);
@@ -538,38 +506,21 @@ class PostOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        var result = postOutput.search(input, null);
+        postOutput.search(input, null);
 
-        assertNotNull(result);
-        verify(postOutputMapper).toModel(any(PostEntity.class), eq(Language.PORTUGUESE), anyList());
     }
 
     @Test
-    void search_nullLanguage_keepsAllTagTranslations() {
-        var tagEnContent = new TagContentEntity();
-        tagEnContent.setLanguage(Language.ENGLISH);
-        tagEnContent.setName("Java");
+    void search_fetchesTagContentsWithNullLanguageWhenNoLanguageRequested() {
+        var entityId = UUID.randomUUID();
+        when(postEntity.getId()).thenReturn(entityId);
+        Page<PostEntity> page = new PageImpl<>(List.of(postEntity));
 
-        var tagPtContent = new TagContentEntity();
-        tagPtContent.setLanguage(Language.PORTUGUESE);
-        tagPtContent.setName("Java PT");
-
-        var tag = new TagEntity();
-        tag.setContents(new ArrayList<>(List.of(tagEnContent, tagPtContent)));
-
-        var enContent = new PostContentEntity();
-        enContent.setLanguage(Language.ENGLISH);
-        enContent.setTitle("Title");
-        enContent.setContent("Content");
-
-        var entity = new PostEntity();
-        entity.setContents(new ArrayList<>(List.of(enContent)));
-        entity.setTags(new ArrayList<>(List.of(tag)));
-
-        Page<PostEntity> page = new PageImpl<>(List.of(entity));
         when(postRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(page);
-        when(postOutputMapper.toModel(any(PostEntity.class), isNull(), anyList())).thenReturn(expectedResult);
+        when(postRepository.findAllByIdWithSingleContent(List.of(entityId), null))
+                .thenReturn(List.of(postEntity));
+        when(postOutputMapper.toModel(eq(postEntity), anyList())).thenReturn(expectedResult);
 
         var queryModel = mock(PostQueryModel.class);
         when(queryModel.language()).thenReturn(null);
@@ -577,36 +528,117 @@ class PostOutputTest {
 
         var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        var result = postOutput.search(input, null);
+        postOutput.search(input, null);
 
-        assertNotNull(result);
-        verify(postOutputMapper).toModel(any(PostEntity.class), isNull(), anyList());
     }
 
     @Test
-    void findBySlugAndIncrementView_filtersContentsToRequestedLanguage() {
+    void findBySlugAndIncrementView_filtersContentsInQuery_mapsWithPlainMapper() {
         var enContent = new PostContentEntity();
-        enContent.setLanguage(Language.ENGLISH);
-        enContent.setTitle("English Title");
-        enContent.setContent("English Content");
-
-        var ptContent = new PostContentEntity();
-        ptContent.setLanguage(Language.PORTUGUESE);
-        ptContent.setTitle("Titulo");
-        ptContent.setContent("Conteudo");
+        enContent.setLanguage(Language.PORTUGUESE);
+        enContent.setTitle("Titulo");
+        enContent.setContent("Conteudo");
 
         var entity = new PostEntity();
-        entity.setContents(new ArrayList<>(List.of(enContent, ptContent)));
+        entity.setContents(new ArrayList<>(List.of(enContent)));
         entity.setTags(new ArrayList<>());
         entity.setViewCount(0L);
+        var projectId = UUID.randomUUID();
 
         when(postRepository.findBySlugAndLanguage("my-post", Language.PORTUGUESE)).thenReturn(Optional.of(entity));
         when(postRepository.save(entity)).thenReturn(entity);
-        when(postOutputMapper.toModel(eq(entity), eq(Language.PORTUGUESE), anyList())).thenReturn(expectedResult);
+        when(postRepository.findProjectIdsByPostId(entity.getId())).thenReturn(List.of(projectId));
+        when(postOutputMapper.toModel(entity, List.of(projectId))).thenReturn(expectedResult);
 
         var result = postOutput.findBySlugAndIncrementView("my-post", Language.PORTUGUESE);
 
         assertEquals(expectedResult, result);
-        verify(postOutputMapper).toModel(eq(entity), eq(Language.PORTUGUESE), anyList());
+        verify(postOutputMapper).toModel(entity, List.of(projectId));
+    }
+
+    @Test
+    void findAllById_isTransactionalReadOnly() throws NoSuchMethodException {
+        var method = PostOutput.class.getMethod("findAllById", List.class, Language.class);
+        var transactional = method.getAnnotation(Transactional.class);
+
+        assertNotNull(transactional);
+        assertTrue(transactional.readOnly());
+    }
+
+    @Test
+    void findAllById_nullIds_returnsEmptyList() {
+        var result = postOutput.findAllById(null, Language.ENGLISH);
+
+        assertTrue(result.isEmpty());
+        verify(postRepository, never()).findAllByIdWithSingleContent(anyList(), any());
+    }
+
+    @Test
+    void findAllById_emptyIds_returnsEmptyList() {
+        var result = postOutput.findAllById(List.of(), Language.ENGLISH);
+
+        assertTrue(result.isEmpty());
+        verify(postRepository, never()).findAllByIdWithSingleContent(anyList(), any());
+    }
+
+    @Test
+    void findAllById_withIds_passesLanguageToQueryAndPreservesRequestOrder() {
+        var idA = UUID.randomUUID();
+        var idB = UUID.randomUUID();
+        var entityA = new PostEntity();
+        entityA.setId(idA);
+        entityA.setTags(new ArrayList<>());
+        var entityB = new PostEntity();
+        entityB.setId(idB);
+        entityB.setTags(new ArrayList<>());
+
+        when(postRepository.findAllByIdWithSingleContent(List.of(idA, idB), Language.PORTUGUESE))
+            .thenReturn(List.of(entityB, entityA));
+        when(postOutputMapper.toModel(eq(entityA), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(entityB), anyList())).thenReturn(post);
+
+        var result = postOutput.findAllById(List.of(idA, idB), Language.PORTUGUESE);
+
+        assertEquals(List.of(expectedResult, post), result);
+        verify(postRepository).findAllByIdWithSingleContent(List.of(idA, idB), Language.PORTUGUESE);
+    }
+
+    @Test
+    void findAllById_withIds_buildsProjectIdsViaBatchQuery() {
+        var idA = UUID.randomUUID();
+        var idB = UUID.randomUUID();
+        var projectId = UUID.randomUUID();
+        var entityA = new PostEntity();
+        entityA.setId(idA);
+        entityA.setTags(new ArrayList<>());
+
+        // B is missing from the fetch result (e.g. no rows) and must be skipped
+        when(postRepository.findAllByIdWithSingleContent(List.of(idA, idB), Language.ENGLISH))
+            .thenReturn(List.of(entityA));
+        when(postRepository.findProjectIdsByPostIds(List.of(idA)))
+            .thenReturn(List.<Object[]>of(new Object[]{idA, projectId}));
+        when(postOutputMapper.toModel(eq(entityA), eq(List.of(projectId)))).thenReturn(expectedResult);
+
+        var result = postOutput.findAllById(List.of(idA, idB), Language.ENGLISH);
+
+        assertEquals(List.of(expectedResult), result);
+        verify(postOutputMapper).toModel(entityA, List.of(projectId));
+    }
+
+    @Test
+    void findAllById_nullLanguage_passesNullToQuery() {
+        var entityId = UUID.randomUUID();
+        var entity = new PostEntity();
+        entity.setId(entityId);
+        entity.setTags(new ArrayList<>());
+
+        when(postRepository.findAllByIdWithSingleContent(List.of(entityId), null))
+            .thenReturn(List.of(entity));
+        when(postOutputMapper.toModel(eq(entity), anyList())).thenReturn(expectedResult);
+
+        var result = postOutput.findAllById(List.of(entityId), null);
+
+        assertEquals(List.of(expectedResult), result);
+        verify(postRepository).findAllByIdWithSingleContent(List.of(entityId), null);
     }
 }

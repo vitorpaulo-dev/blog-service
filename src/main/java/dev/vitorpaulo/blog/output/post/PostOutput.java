@@ -21,10 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static dev.vitorpaulo.blog.common.util.RoleUtils.isAdmin;
@@ -39,9 +36,14 @@ public class PostOutput {
 	private final TagRepository tagRepository;
 	private final AuthorRepository authorRepository;
 
-	public PostModel findById(UUID id) {
-        return postRepository.findById(id)
-			.map(entity -> postOutputMapper.toModel(entity, postRepository.findProjectIdsByPostId(id)))
+    @Transactional(readOnly = true)
+    public PostModel findById(UUID id) {
+        return postRepository.findByIdWithContents(id)
+			.map(entity -> postOutputMapper.toModel(
+				entity,
+				postRepository.findProjectIds(id),
+				postRepository.findTagIds(id)
+			))
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
     }
 
@@ -51,11 +53,14 @@ public class PostOutput {
                 .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_SLUG_NOT_FOUND));
         entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
 
-        final var saved = postRepository.save(entity);
-        return postOutputMapper.toModel(saved, language, postRepository.findProjectIdsByPostId(saved.getId()));
+        return postOutputMapper.toModel(
+			postRepository.save(entity),
+			postRepository.findProjectIds(entity.getId()),
+			postRepository.findTagIds(entity.getId())
+		);
     }
 
-    @Transactional
+	@Transactional
     public PostModel save(PostModel post, List<UUID> tagIds, List<UUID> projectIds, AuthorModel author) {
         validateTranslations(post.translations());
         final var firstContent = getFirstContent(post.translations());
@@ -84,7 +89,7 @@ public class PostOutput {
         if (projectIds != null) entity.setProjects(projectRepository.findAllById(projectIds));
 
         final var saved = postRepository.save(entity);
-        return postOutputMapper.toModel(saved, postRepository.findProjectIdsByPostId(saved.getId()));
+        return postOutputMapper.toModel(saved, projectIds, tagIds);
     }
 
     @Transactional
@@ -106,11 +111,11 @@ public class PostOutput {
 
         syncContents(entity, post.translations());
 
-        if (tagIds != null) entity.setTags(tagRepository.findAllById(tagIds));
-        if (projectIds != null) entity.setProjects(projectRepository.findAllById(projectIds));
+        entity.setTags(tagRepository.findAllById(Objects.requireNonNullElse(tagIds, Collections.emptyList())));
+        entity.setProjects(projectRepository.findAllById(Objects.requireNonNullElse(projectIds, Collections.emptyList())));
 
         final var saved = postRepository.save(entity);
-        return postOutputMapper.toModel(saved, postRepository.findProjectIdsByPostId(saved.getId()));
+        return postOutputMapper.toModel(saved, projectIds, tagIds);
     }
 
     @Transactional
@@ -118,6 +123,7 @@ public class PostOutput {
         postRepository.deleteByIdWithAuthor(ids, author.id(), isAdmin(author.role()));
     }
 
+    @Transactional(readOnly = true)
     public PaginatedOutput<PostModel> search(PaginatedInput<PostQueryModel> pageableInput, AuthorModel author) {
         final var language = pageableInput.query().language();
         final var pageable = PageRequest.of(pageableInput.page(), pageableInput.size());
@@ -128,31 +134,26 @@ public class PostOutput {
                 language != null ? language.name() : null,
                 author != null,
                 pageable,
-                mapSortProperty(pageableInput.sort(), pageableInput.direction())
+                pageableInput.sort(),
+				pageableInput.direction().name()
             );
 
-        final var projectIdsMap = buildProjectIdsMap(page.getContent());
-        final var content = page.getContent().stream()
-            .map(entity -> postOutputMapper.toModel(entity, language, projectIdsMap.getOrDefault(entity.getId(), List.of())))
-            .toList();
-
         return new PaginatedOutput<>(
-            content,
+			page
+				.stream()
+				.map(post -> postOutputMapper.toModel(post, Collections.emptyList(), postRepository.findTagIds(post.getId())))
+				.peek(post -> {
+					final var contents = post.translations();
+					if (contents.size() <= 1) return;
+
+					contents.keySet().removeIf(key -> key != language);
+				})
+				.toList(),
             page.getNumber(),
             page.getSize(),
             page.getTotalElements(),
             page.getTotalPages()
         );
-    }
-
-    private Map<UUID, List<UUID>> buildProjectIdsMap(List<PostEntity> entities) {
-        if (entities.isEmpty()) return Map.of();
-        final var postIds = entities.stream().map(PostEntity::getId).toList();
-        return postRepository.findProjectIdsByPostIds(postIds).stream()
-            .collect(Collectors.groupingBy(
-                row -> (UUID) row[0],
-                Collectors.mapping(row -> (UUID) row[1], Collectors.toList())
-            ));
     }
 
     private void syncContents(PostEntity entity, Map<Language, PostContentModel> translations) {
@@ -206,15 +207,5 @@ public class PostOutput {
         final var counter = postRepository.countBySlugAndIdNot(base, currentId);
         if (counter == 0) return base;
         return base + "-" + counter + 1;
-    }
-
-    private String mapSortProperty(String sort, Sort.Direction direction) {
-        final var dir = direction.name();
-        return switch (sort) {
-            case "slug" -> "slug " + dir;
-            case "viewCount" -> "view_count " + dir;
-            case "reactionCount" -> "reactionCount " + dir;
-            default -> "created_at " + dir + ", updated_at " + dir;
-        };
     }
 }

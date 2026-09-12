@@ -18,7 +18,7 @@ public record ProjectResponse(
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         List<AuthorResponse> authors,
-        List<TagResponse> tags,
+        List<UUID> tagIds,
         Long viewCount,
         Long loveCount,
         Long celebrateCount,

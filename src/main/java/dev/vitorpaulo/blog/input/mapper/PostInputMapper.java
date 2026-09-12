@@ -6,7 +6,6 @@ import dev.vitorpaulo.blog.input.request.CreatePostRequest;
 import dev.vitorpaulo.blog.input.request.PostContentRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
-import dev.vitorpaulo.blog.input.response.AuthorContentResponse;
 import dev.vitorpaulo.blog.input.response.AuthorResponse;
 import dev.vitorpaulo.blog.input.response.PostContentResponse;
 import dev.vitorpaulo.blog.input.response.PostResponse;
@@ -35,7 +34,7 @@ public interface PostInputMapper {
 	@Mapping(target = "createdAt", ignore = true)
 	@Mapping(target = "updatedAt", ignore = true)
 	@Mapping(target = "authors", ignore = true)
-	@Mapping(target = "tags", ignore = true)
+	@Mapping(target = "tagIds", ignore = true)
 	@Mapping(target = "projectIds", ignore = true)
 	@Mapping(target = "viewCount", ignore = true)
 	@Mapping(target = "loveCount", ignore = true)
@@ -51,7 +50,7 @@ public interface PostInputMapper {
 	@Mapping(target = "createdAt", ignore = true)
 	@Mapping(target = "updatedAt", ignore = true)
 	@Mapping(target = "authors", ignore = true)
-	@Mapping(target = "tags", ignore = true)
+	@Mapping(target = "tagIds", ignore = true)
 	@Mapping(target = "projectIds", ignore = true)
 	@Mapping(target = "viewCount", ignore = true)
 	@Mapping(target = "loveCount", ignore = true)

@@ -14,17 +14,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring")
-public interface TagMapper {
+public interface TagOutputMapper {
 
     @Mapping(target = "translations", expression = "java(contentsToTranslations(entity.getContents()))")
     TagModel toModel(TagEntity entity);
-
-    default TagModel toModel(TagEntity entity, Language language) {
-        TagModel model = toModel(entity);
-        if (model == null || language == null) return model;
-        var filtered = filterTranslations(model.translations(), language);
-        return new TagModel(model.id(), model.slug(), filtered);
-    }
 
     TagContentModel toContentModel(TagContentEntity entity);
 
@@ -34,14 +27,6 @@ public interface TagMapper {
             TagContentEntity::getLanguage,
             this::toContentModel
         ));
-    }
-
-    default Map<Language, TagContentModel> filterTranslations(Map<Language, TagContentModel> translations, Language requested) {
-        if (translations == null || translations.isEmpty()) return Map.of();
-        if (translations.containsKey(requested)) return Map.of(requested, translations.get(requested));
-        if (translations.containsKey(Language.ENGLISH)) return Map.of(Language.ENGLISH, translations.get(Language.ENGLISH));
-        return translations.entrySet().stream().findFirst()
-            .map(e -> Map.of(e.getKey(), e.getValue())).orElse(Map.of());
     }
 
     @Mapping(target = "contents", ignore = true)

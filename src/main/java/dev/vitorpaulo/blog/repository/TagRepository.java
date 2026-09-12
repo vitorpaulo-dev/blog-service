@@ -14,25 +14,39 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface TagRepository extends JpaRepository<TagEntity, UUID> {
+    @Query("SELECT t FROM TagEntity t JOIN t.contents c WHERE t.slug = :slug AND c.language = :language")
+    Optional<TagEntity> findBySlugAndLanguage(String slug, Language language);
 
-    @Query("SELECT t FROM TagEntity t JOIN FETCH t.contents c WHERE t.slug = :slug AND c.language = :language")
-    Optional<TagEntity> findBySlugAndLanguage(@Param("slug") String slug, @Param("language") Language language);
+    @Query("SELECT t FROM TagEntity t LEFT JOIN t.contents WHERE t.id = :id")
+    Optional<TagEntity> findByIdWithContents(UUID id);
+
+	@Query("""
+		SELECT DISTINCT t
+		FROM TagEntity t
+		JOIN t.contents c
+		WHERE t.id IN :ids
+		ORDER BY t.slug
+		LIMIT 10
+	""")
+	List<TagEntity> findWithSingleContent(
+		List<UUID> ids,
+		Language language
+	);
 
     long countBySlugAndIdNot(String slug, UUID id);
 
 	@Query("""
 		SELECT t
 		FROM TagEntity t
-		LEFT JOIN FETCH t.contents
-		WHERE EXISTS (
-			SELECT 1
-			FROM t.contents c
-			WHERE LOWER(c.name) LIKE LOWER(CONCAT('%', COALESCE(:name, ''), '%'))
-		)
+		JOIN FETCH t.contents c
 	""")
-	Page<TagEntity> search(@Param("name") String name, Pageable pageable);
+	Page<TagEntity> search(
+		String name,
+		Language language,
+		Pageable pageable
+	);
 
     @Modifying
     @Query("DELETE FROM TagEntity t WHERE t.id IN :ids")
-    void deleteByIdIn(@Param("ids") List<UUID> ids);
+    void deleteByIdIn(List<UUID> ids);
 }

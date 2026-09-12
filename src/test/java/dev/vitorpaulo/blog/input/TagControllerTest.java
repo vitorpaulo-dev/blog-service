@@ -7,6 +7,7 @@ import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.input.mapper.TagInputMapper;
 import dev.vitorpaulo.blog.input.request.CreateTagRequest;
 import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
+import dev.vitorpaulo.blog.input.request.TagBatchRequest;
 import dev.vitorpaulo.blog.input.request.TagQueryRequest;
 import dev.vitorpaulo.blog.input.request.UpdateTagRequest;
 import dev.vitorpaulo.blog.input.response.TagResponse;
@@ -16,6 +17,7 @@ import dev.vitorpaulo.blog.model.TagModel;
 import dev.vitorpaulo.blog.model.TagQueryModel;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
+import dev.vitorpaulo.blog.output.tag.TagOutput;
 import dev.vitorpaulo.blog.usecase.tag.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +41,7 @@ class TagControllerTest {
     @Mock private GetTagByIdUseCase getTagByIdUseCase;
     @Mock private SearchTagUseCase searchTagUseCase;
     @Mock private TagInputMapper tagInputMapper;
+    @Mock private TagOutput tagOutput;
     @Mock private AuthorModel author;
     @Mock private TagModel tagModel;
     @Mock private TagResponse tagResponse;
@@ -130,5 +133,19 @@ class TagControllerTest {
 
         assertEquals(pageableResponse, result);
         verify(searchTagUseCase).execute(paginatedInput, null);
+    }
+
+    @Test
+    void batch_validRequest_returnsList() {
+        var ids = List.of(UUID.randomUUID());
+        var batchRequest = new TagBatchRequest(ids, Language.ENGLISH);
+        when(tagOutput.findAllById(ids, Language.ENGLISH)).thenReturn(List.of(tagModel));
+        when(tagInputMapper.toResponse(tagModel)).thenReturn(tagResponse);
+
+        var result = tagController.batch(batchRequest);
+
+        assertEquals(1, result.size());
+        assertEquals(tagResponse, result.getFirst());
+        verify(tagOutput).findAllById(ids, Language.ENGLISH);
     }
 }

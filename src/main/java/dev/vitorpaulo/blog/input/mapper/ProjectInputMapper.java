@@ -6,7 +6,6 @@ import dev.vitorpaulo.blog.input.request.CreateProjectRequest;
 import dev.vitorpaulo.blog.input.request.ProjectContentRequest;
 import dev.vitorpaulo.blog.input.request.ProjectQueryRequest;
 import dev.vitorpaulo.blog.input.request.UpdateProjectRequest;
-import dev.vitorpaulo.blog.input.response.AuthorContentResponse;
 import dev.vitorpaulo.blog.input.response.ProjectContentResponse;
 import dev.vitorpaulo.blog.input.response.ProjectResponse;
 import dev.vitorpaulo.blog.input.response.TagContentResponse;
@@ -31,7 +30,7 @@ public interface ProjectInputMapper {
 	@Mapping(target = "createdAt", ignore = true)
 	@Mapping(target = "updatedAt", ignore = true)
 	@Mapping(target = "authors", ignore = true)
-	@Mapping(target = "tags", ignore = true)
+	@Mapping(target = "tagIds", ignore = true)
 	@Mapping(target = "viewCount", ignore = true)
 	@Mapping(target = "loveCount", ignore = true)
 	@Mapping(target = "celebrateCount", ignore = true)
@@ -45,7 +44,7 @@ public interface ProjectInputMapper {
 	@Mapping(target = "createdAt", ignore = true)
 	@Mapping(target = "updatedAt", ignore = true)
 	@Mapping(target = "authors", ignore = true)
-	@Mapping(target = "tags", ignore = true)
+	@Mapping(target = "tagIds", ignore = true)
 	@Mapping(target = "viewCount", ignore = true)
 	@Mapping(target = "loveCount", ignore = true)
 	@Mapping(target = "celebrateCount", ignore = true)
