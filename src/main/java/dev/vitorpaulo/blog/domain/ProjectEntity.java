@@ -61,7 +61,7 @@ public class ProjectEntity {
     )
     private List<AuthorEntity> authors;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "project_tag",
             joinColumns = @JoinColumn(name = "project_id"),

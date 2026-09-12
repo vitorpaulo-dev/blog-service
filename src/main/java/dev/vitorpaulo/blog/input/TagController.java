@@ -46,7 +46,7 @@ public class TagController {
 
     @PutMapping("/{id}")
     public TagResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateTagRequest request, @CurrentAuthor AuthorModel author) {
-        final var tag = updateTagUseCase.execute(id, tagInputMapper.toModel(request, id));
+        final var tag = updateTagUseCase.execute(tagInputMapper.toModel(request, id));
         return tagInputMapper.toResponse(tag);
     }
 

@@ -55,7 +55,7 @@ public class PostEntity {
     )
     private List<AuthorEntity> authors;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "post_tag",
             joinColumns = @JoinColumn(name = "post_id"),

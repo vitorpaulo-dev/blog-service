@@ -13,8 +13,7 @@ public class UpdateTagUseCase {
 
     private final TagOutput tagOutput;
 
-    public TagModel execute(UUID id, TagModel tag) {
-        final var model = new TagModel(id, tag.slug(), tag.translations());
+    public TagModel execute(TagModel model) {
         return tagOutput.update(model);
     }
 }
