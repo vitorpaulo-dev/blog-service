@@ -107,7 +107,15 @@ public class ProjectOutput {
 			);
 
 		return new PaginatedOutput<>(
-			page.map(project -> projectOutputMapper.toModel(project, Collections.emptyList())).toList(),
+			page.stream()
+				.map(project -> projectOutputMapper.toModel(project, Collections.emptyList()))
+				.peek(project -> {
+					final var contents = project.translations();
+					if (contents.size() <= 1) return;
+
+					contents.keySet().removeIf(key -> key != language);
+				})
+				.toList(),
 			page.getNumber(),
 			page.getSize(),
 			page.getTotalElements(),
@@ -120,6 +128,12 @@ public class ProjectOutput {
 		return projectRepository.findAllByIdWithSingleContent(ids, language)
 			.stream()
 			.map(project -> projectOutputMapper.toModel(project, Collections.emptyList()))
+			.peek(project -> {
+				final var contents = project.translations();
+				if (contents.size() <= 1) return;
+
+				contents.keySet().removeIf(key -> key != language);
+			})
 			.toList();
 	}
 

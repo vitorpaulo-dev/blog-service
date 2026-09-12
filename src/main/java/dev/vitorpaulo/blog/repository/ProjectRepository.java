@@ -31,7 +31,7 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
 
 	@Query("""
 		SELECT p FROM ProjectEntity p
-		JOIN p.contents c
+		JOIN FETCH p.contents c
 		WHERE p.slug = :slug
 		  AND c.id = COALESCE(
 			  (SELECT pc.id FROM ProjectContentEntity pc WHERE pc.project = p AND pc.language = :language),
