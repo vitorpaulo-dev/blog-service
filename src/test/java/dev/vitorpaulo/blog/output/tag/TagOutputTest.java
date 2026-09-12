@@ -13,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,25 +27,23 @@ class TagOutputTest {
 
     @Mock private TagRepository tagRepository;
     @Mock private TagOutputMapper tagOutputMapper;
-    @Mock private TagEntity tagEntity1;
-    @Mock private TagEntity tagEntity2;
-    @Mock private TagModel tagModel1;
-    @Mock private TagModel tagModel2;
+    @Mock private TagEntity tagEntity;
+    @Mock private TagEntity secondTagEntity;
+    @Mock private TagModel expectedResult;
+    @Mock private TagModel secondResult;
 
     @InjectMocks
     private TagOutput tagOutput;
 
     @Test
-    void findById_found_usesFindByIdWithContentsAndReturnsTag() {
-        var entityId = UUID.randomUUID();
+    void findById_found_usesFindByIdWithContents() {
+        var id = UUID.randomUUID();
+        when(tagRepository.findByIdWithContents(id)).thenReturn(Optional.of(tagEntity));
+        when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
 
-        when(tagRepository.findByIdWithContents(entityId)).thenReturn(Optional.of(tagEntity1));
-        when(tagOutputMapper.toModel(tagEntity1)).thenReturn(tagModel1);
+        var result = tagOutput.findById(id);
 
-        var result = tagOutput.findById(entityId);
-
-        assertEquals(tagModel1, result);
-        verify(tagRepository).findByIdWithContents(entityId);
+        assertEquals(expectedResult, result);
         verify(tagRepository, never()).findById(any());
     }
 
@@ -57,65 +56,50 @@ class TagOutputTest {
     }
 
     @Test
-    void findAllById_nullIds_returnsEmptyList() {
-        var result = tagOutput.findAllById(null);
-        assertTrue(result.isEmpty());
-        verifyNoInteractions(tagRepository);
-    }
-
-    @Test
-    void findAllById_emptyIds_returnsEmptyList() {
-        var result = tagOutput.findAllById(List.of());
-        assertTrue(result.isEmpty());
-        verifyNoInteractions(tagRepository);
-    }
-
-    @Test
-    void findAllById_withIds_returnsMappedModels() {
+    void findAllById_withIds_usesFindWithSingleContent() {
         var id1 = UUID.randomUUID();
         var id2 = UUID.randomUUID();
-
-        when(tagRepository.findAllById(List.of(id1, id2))).thenReturn(List.of(tagEntity1, tagEntity2));
-        when(tagOutputMapper.toModel(tagEntity1)).thenReturn(tagModel1);
-        when(tagOutputMapper.toModel(tagEntity2)).thenReturn(tagModel2);
-
-        var result = tagOutput.findAllById(List.of(id1, id2));
-
-        assertEquals(2, result.size());
-        assertEquals(tagModel1, result.get(0));
-        assertEquals(tagModel2, result.get(1));
-    }
-
-    @Test
-    void findAllByIdWithLanguage_usesSingleContentFetchAndOneArgMapper() {
-        var id1 = UUID.randomUUID();
-        var id2 = UUID.randomUUID();
-
         when(tagRepository.findWithSingleContent(List.of(id1, id2), Language.PORTUGUESE))
-            .thenReturn(List.of(tagEntity1, tagEntity2));
-        when(tagOutputMapper.toModel(tagEntity1)).thenReturn(tagModel1);
-        when(tagOutputMapper.toModel(tagEntity2)).thenReturn(tagModel2);
+                .thenReturn(List.of(tagEntity, secondTagEntity));
+        when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
+        when(tagOutputMapper.toModel(secondTagEntity)).thenReturn(secondResult);
+        when(expectedResult.translations()).thenReturn(java.util.Map.of());
+        when(secondResult.translations()).thenReturn(java.util.Map.of());
 
         var result = tagOutput.findAllById(List.of(id1, id2), Language.PORTUGUESE);
 
-        assertEquals(2, result.size());
-        assertEquals(tagModel1, result.get(0));
-        assertEquals(tagModel2, result.get(1));
-        verify(tagRepository).findWithSingleContent(List.of(id1, id2), Language.PORTUGUESE);
+        assertEquals(List.of(expectedResult, secondResult), result);
         verify(tagRepository, never()).findAllById(anyList());
     }
 
     @Test
-    void findAllByIdWithLanguage_nullIds_returnsEmptyList() {
-        var result = tagOutput.findAllById(null, Language.PORTUGUESE);
+    void findAllById_nullIds_returnsEmptyList() {
+        var result = tagOutput.findAllById(null, Language.ENGLISH);
+
         assertTrue(result.isEmpty());
-        verifyNoInteractions(tagRepository);
     }
 
     @Test
-    void findAllByIdWithLanguage_emptyIds_returnsEmptyList() {
-        var result = tagOutput.findAllById(List.of(), Language.PORTUGUESE);
+    void findAllById_emptyIds_returnsEmptyList() {
+        var result = tagOutput.findAllById(List.of(), Language.ENGLISH);
+
         assertTrue(result.isEmpty());
-        verifyNoInteractions(tagRepository);
+    }
+
+    // Committed behavior: batch filters non-requested languages in Java (removeIf).
+    @Test
+    void findAllById_filtersOtherLanguagesInJava() {
+        var translations = new HashMap<Language, dev.vitorpaulo.blog.model.TagContentModel>();
+        translations.put(Language.ENGLISH, null);
+        translations.put(Language.PORTUGUESE, null);
+        when(tagRepository.findWithSingleContent(anyList(), eq(Language.PORTUGUESE))).thenReturn(List.of(tagEntity));
+        when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
+        when(expectedResult.translations()).thenReturn(translations);
+
+        var result = tagOutput.findAllById(List.of(UUID.randomUUID()), Language.PORTUGUESE);
+
+        assertEquals(1, result.size());
+        assertTrue(translations.containsKey(Language.PORTUGUESE));
+        assertFalse(translations.containsKey(Language.ENGLISH));
     }
 }

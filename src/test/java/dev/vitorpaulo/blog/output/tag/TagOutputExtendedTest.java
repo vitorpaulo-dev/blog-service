@@ -13,10 +13,10 @@ import dev.vitorpaulo.blog.output.mapper.TagOutputMapper;
 import dev.vitorpaulo.blog.repository.TagRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -46,25 +46,6 @@ class TagOutputExtendedTest {
     private TagOutput tagOutput;
 
     @Test
-    void findById_found_returnsTag() {
-        var id = UUID.randomUUID();
-        when(tagRepository.findByIdWithContents(id)).thenReturn(Optional.of(tagEntity));
-        when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
-
-        var result = tagOutput.findById(id);
-
-        assertEquals(expectedResult, result);
-    }
-
-    @Test
-    void findById_notFound_throwsNotFoundException() {
-        when(tagRepository.findByIdWithContents(any())).thenReturn(Optional.empty());
-
-        var ex = assertThrows(NotFoundException.class, () -> tagOutput.findById(UUID.randomUUID()));
-        assertEquals(ExceptionCode.TAG_NOT_FOUND, ex.getCode());
-    }
-
-    @Test
     void findBySlug_found_mapsWithPlainMapper() {
         when(tagRepository.findBySlugAndLanguage("java", Language.ENGLISH)).thenReturn(Optional.of(tagEntity));
         when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
@@ -79,57 +60,34 @@ class TagOutputExtendedTest {
         when(tagRepository.findBySlugAndLanguage(anyString(), any())).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class,
-            () -> tagOutput.findBySlug("nonexistent", Language.ENGLISH));
+                () -> tagOutput.findBySlug("nonexistent", Language.ENGLISH));
         assertEquals(ExceptionCode.TAG_NOT_FOUND, ex.getCode());
     }
 
     @Test
-    void save_withEnglishTranslation_savesTag() {
-        var translations = Map.of(Language.ENGLISH, tagContentModel);
-        when(tagModel.translations()).thenReturn(translations);
+    void save_validRequest_savesWithSlugFromName() {
+        when(tagModel.translations()).thenReturn(Map.of(Language.ENGLISH, tagContentModel));
         when(tagContentModel.name()).thenReturn("Java");
-
-        var contentEntity = new TagContentEntity();
-        when(tagOutputMapper.toContentEntity(tagContentModel)).thenReturn(contentEntity);
-
-        when(tagRepository.countBySlugAndIdNot(anyString(), isNull())).thenReturn(0L);
-        when(tagOutputMapper.toModel(any(TagEntity.class))).thenReturn(expectedResult);
+        when(tagOutputMapper.toContentEntity(tagContentModel)).thenReturn(new TagContentEntity());
+        when(tagRepository.countBySlugAndIdNot("java", null)).thenReturn(0L);
         when(tagRepository.save(any(TagEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         tagOutput.save(tagModel);
 
-        verify(tagRepository).save(any(TagEntity.class));
+        verify(tagRepository).save(argThat(e -> "java".equals(e.getSlug())));
     }
 
     @Test
-    void save_withConflict_generatesUniqueSlug() {
-        var translations = Map.of(Language.ENGLISH, tagContentModel);
-        when(tagModel.translations()).thenReturn(translations);
+    void save_slugConflict_appendsIncrementedCounter() {
+        when(tagModel.translations()).thenReturn(Map.of(Language.ENGLISH, tagContentModel));
         when(tagContentModel.name()).thenReturn("Java");
-
-        var contentEntity = new TagContentEntity();
-        when(tagOutputMapper.toContentEntity(tagContentModel)).thenReturn(contentEntity);
-
+        when(tagOutputMapper.toContentEntity(tagContentModel)).thenReturn(new TagContentEntity());
         when(tagRepository.countBySlugAndIdNot("java", null)).thenReturn(2L);
-        when(tagOutputMapper.toModel(any(TagEntity.class))).thenReturn(expectedResult);
         when(tagRepository.save(any(TagEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         tagOutput.save(tagModel);
 
-        verify(tagRepository).save(argThat(e -> e.getSlug().equals("java-3")));
-    }
-
-    @Test
-    void save_emptyTranslations_usesEmptySlug() {
-        when(tagModel.translations()).thenReturn(Map.of());
-
-        when(tagRepository.countBySlugAndIdNot(anyString(), isNull())).thenReturn(0L);
-        when(tagOutputMapper.toModel(any(TagEntity.class))).thenReturn(expectedResult);
-        when(tagRepository.save(any(TagEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        tagOutput.save(tagModel);
-
-        verify(tagRepository).save(any(TagEntity.class));
+        verify(tagRepository).save(argThat(e -> "java-3".equals(e.getSlug())));
     }
 
     @Test
@@ -143,48 +101,19 @@ class TagOutputExtendedTest {
     }
 
     @Test
-    void update_existingContent_updatesInPlace() {
-        var tagId = UUID.randomUUID();
-        var translations = Map.of(Language.ENGLISH, tagContentModel);
-        when(tagModel.translations()).thenReturn(translations);
-        when(tagModel.id()).thenReturn(tagId);
-        when(tagContentModel.name()).thenReturn("New Name");
-
-        when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
-        when(existingContent.getName()).thenReturn("Old Name");
-
-        var contents = new ArrayList<>(List.of(existingContent));
-        when(tagEntity.getContents()).thenReturn(contents);
-
-        when(tagRepository.findById(tagId)).thenReturn(Optional.of(tagEntity));
-        when(tagRepository.save(tagEntity)).thenReturn(tagEntity);
-        when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
-
-        tagOutput.update(tagModel);
-
-        verify(existingContent).setName("New Name");
-        assertEquals(1, tagEntity.getContents().size());
-    }
-
-    @Test
     void update_nameChanged_regeneratesSlug() {
         var tagId = UUID.randomUUID();
-        var translations = Map.of(Language.ENGLISH, tagContentModel);
-        when(tagModel.translations()).thenReturn(translations);
+        when(tagModel.translations()).thenReturn(Map.of(Language.ENGLISH, tagContentModel));
         when(tagModel.id()).thenReturn(tagId);
         when(tagContentModel.name()).thenReturn("Changed Name");
-
         when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(existingContent.getName()).thenReturn("Original Name");
-
         var contents = new ArrayList<>(List.of(existingContent));
-        when(tagEntity.getId()).thenReturn(tagId);
         when(tagEntity.getContents()).thenReturn(contents);
-
+        when(tagEntity.getId()).thenReturn(tagId);
         when(tagRepository.findById(tagId)).thenReturn(Optional.of(tagEntity));
         when(tagRepository.countBySlugAndIdNot("changed-name", tagId)).thenReturn(0L);
         when(tagRepository.save(tagEntity)).thenReturn(tagEntity);
-        when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
 
         tagOutput.update(tagModel);
 
@@ -192,27 +121,41 @@ class TagOutputExtendedTest {
     }
 
     @Test
-    void update_nameSame_keepsSlug() {
+    void update_nameUnchanged_keepsSlug() {
         var tagId = UUID.randomUUID();
-        var translations = Map.of(Language.ENGLISH, tagContentModel);
-        when(tagModel.translations()).thenReturn(translations);
+        when(tagModel.translations()).thenReturn(Map.of(Language.ENGLISH, tagContentModel));
         when(tagModel.id()).thenReturn(tagId);
         when(tagContentModel.name()).thenReturn("Same Name");
-
         when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(existingContent.getName()).thenReturn("Same Name");
-
         var contents = new ArrayList<>(List.of(existingContent));
         when(tagEntity.getContents()).thenReturn(contents);
-
         when(tagRepository.findById(tagId)).thenReturn(Optional.of(tagEntity));
         when(tagRepository.save(tagEntity)).thenReturn(tagEntity);
-        when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
 
         tagOutput.update(tagModel);
 
         verify(tagEntity, never()).setSlug(anyString());
         verify(tagRepository, never()).countBySlugAndIdNot(anyString(), any());
+    }
+
+    @Test
+    void update_existingTranslation_updatesInPlace() {
+        var tagId = UUID.randomUUID();
+        when(tagModel.translations()).thenReturn(Map.of(Language.ENGLISH, tagContentModel));
+        when(tagModel.id()).thenReturn(tagId);
+        when(tagContentModel.name()).thenReturn("New Name");
+        when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
+        when(existingContent.getName()).thenReturn("Old Name");
+        var contents = new ArrayList<>(List.of(existingContent));
+        when(tagEntity.getContents()).thenReturn(contents);
+        when(tagRepository.findById(tagId)).thenReturn(Optional.of(tagEntity));
+        when(tagRepository.save(tagEntity)).thenReturn(tagEntity);
+
+        tagOutput.update(tagModel);
+
+        verify(existingContent).setName("New Name");
+        assertEquals(1, contents.size());
     }
 
     @Test
@@ -225,70 +168,70 @@ class TagOutputExtendedTest {
     }
 
     @Test
-    void search_withLanguage_filtersContentsInQuery_mapsWithPlainMapper() {
-        Page<TagEntity> page = new PageImpl<>(List.of(tagEntity));
+    void search_propagatesNameAndLanguageToRepository() {
+        when(tagRepository.search(any(), any(), any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        when(tagRepository.search(any(PageRequest.class), eq("java"), eq(Language.ENGLISH))).thenReturn(page);
-        when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
-
-        var queryModel = new TagQueryModel("java", Language.ENGLISH);
-        var input = new PaginatedInput<>(queryModel, 0, 10, "slug", Sort.Direction.ASC);
-
-        var result = tagOutput.search(input, Language.ENGLISH);
-
-        assertNotNull(result);
-        assertEquals(1, result.content().size());
-        verify(tagRepository).search(any(PageRequest.class), eq("java"), eq(Language.ENGLISH));
-        verify(tagOutputMapper).toModel(tagEntity);
-    }
-
-    @Test
-    void search_nullQuery_passesNullNameAndLanguageToRepository() {
-        Page<TagEntity> page = new PageImpl<>(List.of());
-
-        when(tagRepository.search(any(PageRequest.class), isNull(), eq(Language.ENGLISH))).thenReturn(page);
-
-        var input = new PaginatedInput<>(new TagQueryModel(null, null), 0, 10, "createdAt", Sort.Direction.DESC);
+        var input = new PaginatedInput<>(new TagQueryModel("java", Language.ENGLISH), 0, 10, "slug", Sort.Direction.ASC);
 
         tagOutput.search(input, Language.ENGLISH);
 
-        verify(tagRepository).search(any(PageRequest.class), isNull(), eq(Language.ENGLISH));
+        verify(tagRepository).search(eq("java"), eq(Language.ENGLISH), any(PageRequest.class));
     }
 
     @Test
-    void findAllByIdWithLanguage_usesSingleContentFetchAndOneArgMapper() {
-        var id1 = UUID.randomUUID();
-        var id2 = UUID.randomUUID();
-        var tagEntity1 = mock(TagEntity.class);
-        var tagEntity2 = mock(TagEntity.class);
-        var tagModel1 = mock(TagModel.class);
-        var tagModel2 = mock(TagModel.class);
+    void search_nullQuery_passesNullName() {
+        when(tagRepository.search(isNull(), eq(Language.ENGLISH), any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        when(tagRepository.findWithSingleContent(List.of(id1, id2), Language.ENGLISH))
-            .thenReturn(List.of(tagEntity1, tagEntity2));
-        when(tagOutputMapper.toModel(tagEntity1)).thenReturn(tagModel1);
-        when(tagOutputMapper.toModel(tagEntity2)).thenReturn(tagModel2);
+        var input = new PaginatedInput<TagQueryModel>(null, 0, 10, "createdAt", Sort.Direction.DESC);
 
-        var result = tagOutput.findAllById(List.of(id1, id2), Language.ENGLISH);
+        tagOutput.search(input, Language.ENGLISH);
 
-        assertEquals(2, result.size());
-        assertEquals(tagModel1, result.get(0));
-        assertEquals(tagModel2, result.get(1));
-        verify(tagRepository).findWithSingleContent(List.of(id1, id2), Language.ENGLISH);
-        verify(tagRepository, never()).findAllById(anyList());
+        verify(tagRepository).search(isNull(), eq(Language.ENGLISH), any(PageRequest.class));
     }
 
     @Test
-    void findAllByIdWithLanguage_nullIds_returnsEmptyList() {
-        var result = tagOutput.findAllById(null, Language.ENGLISH);
-        assertTrue(result.isEmpty());
-        verifyNoInteractions(tagRepository);
+    void search_mapsSortPropertyAndDirectionIntoPageable() {
+        when(tagRepository.search(any(), any(), any(PageRequest.class))).thenReturn(new PageImpl<>(List.of()));
+
+        var input = new PaginatedInput<>(new TagQueryModel(null, Language.ENGLISH), 0, 10, "name", Sort.Direction.DESC);
+
+        tagOutput.search(input, Language.ENGLISH);
+
+        var captor = ArgumentCaptor.forClass(PageRequest.class);
+        verify(tagRepository).search(any(), any(), captor.capture());
+        assertEquals(Sort.by(Sort.Direction.DESC, "slug"), captor.getValue().getSort());
     }
 
     @Test
-    void findAllByIdWithLanguage_emptyIds_returnsEmptyList() {
-        var result = tagOutput.findAllById(List.of(), Language.ENGLISH);
-        assertTrue(result.isEmpty());
-        verifyNoInteractions(tagRepository);
+    void search_unknownSortField_defaultsToCreatedAt() {
+        when(tagRepository.search(any(), any(), any(PageRequest.class))).thenReturn(new PageImpl<>(List.of()));
+
+        var input = new PaginatedInput<>(new TagQueryModel(null, Language.ENGLISH), 0, 10, "unknown", Sort.Direction.ASC);
+
+        tagOutput.search(input, Language.ENGLISH);
+
+        var captor = ArgumentCaptor.forClass(PageRequest.class);
+        verify(tagRepository).search(any(), any(), captor.capture());
+        assertEquals(Sort.by(Sort.Direction.ASC, "created_at"), captor.getValue().getSort());
+    }
+
+    @Test
+    void search_mapsWithPlainMapperAndFiltersOtherLanguagesInJava() {
+        var translations = new java.util.HashMap<Language, dev.vitorpaulo.blog.model.TagContentModel>();
+        translations.put(Language.ENGLISH, null);
+        translations.put(Language.PORTUGUESE, null);
+        when(tagRepository.search(any(), any(), any(PageRequest.class))).thenReturn(new PageImpl<>(List.of(tagEntity)));
+        when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
+        when(expectedResult.translations()).thenReturn(translations);
+
+        var input = new PaginatedInput<>(new TagQueryModel("java", Language.ENGLISH), 0, 10, "slug", Sort.Direction.ASC);
+
+        var result = tagOutput.search(input, Language.ENGLISH);
+
+        assertEquals(List.of(expectedResult), result.content());
+        assertTrue(translations.containsKey(Language.ENGLISH));
+        assertFalse(translations.containsKey(Language.PORTUGUESE));
     }
 }

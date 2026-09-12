@@ -14,7 +14,6 @@ import dev.vitorpaulo.blog.input.response.ProjectResponse;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
-import dev.vitorpaulo.blog.output.project.ProjectOutput;
 import dev.vitorpaulo.blog.usecase.project.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,8 +37,8 @@ class ProjectControllerTest {
     @Mock private GetProjectByIdUseCase getProjectByIdUseCase;
     @Mock private GetProjectBySlugUseCase getProjectBySlugUseCase;
     @Mock private SearchProjectUseCase searchProjectUseCase;
+    @Mock private GetProjectByBatchUseCase getProjectByBatchUseCase;
     @Mock private ProjectInputMapper projectInputMapper;
-    @Mock private ProjectOutput projectOutput;
     @Mock private AuthorModel author;
     @Mock private ProjectModel projectModel;
     @Mock private ProjectResponse projectResponse;
@@ -137,7 +136,7 @@ class ProjectControllerTest {
         var ids = List.of(UUID.randomUUID());
         when(batchRequest.ids()).thenReturn(ids);
         when(batchRequest.language()).thenReturn(Language.ENGLISH);
-        when(projectOutput.findAllById(ids, Language.ENGLISH)).thenReturn(List.of(projectModel));
+        when(getProjectByBatchUseCase.execute(ids, Language.ENGLISH)).thenReturn(List.of(projectModel));
         when(projectInputMapper.toResponse(projectModel)).thenReturn(projectResponse);
 
         var result = projectController.batch(batchRequest);
