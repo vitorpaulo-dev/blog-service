@@ -29,7 +29,7 @@ public class TagEntity {
     @Column(name = "slug", nullable = false, unique = true)
     private String slug;
 
-    @OneToMany(mappedBy = "tag", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "tag", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<TagContentEntity> contents = new ArrayList<>();
 

@@ -24,11 +24,11 @@ class UpdateProjectUseCaseTest {
 
     @Test
     void execute_returnsUpdatedProject() {
-        when(projectOutput.update(project, author)).thenReturn(updatedProject);
+        when(projectOutput.update(project, null, author)).thenReturn(updatedProject);
 
-        var result = updateProjectUseCase.execute(project, author);
+        var result = updateProjectUseCase.execute(project, null, author);
 
         assertEquals(updatedProject, result);
-        verify(projectOutput).update(project, author);
+        verify(projectOutput).update(project, null, author);
     }
 }

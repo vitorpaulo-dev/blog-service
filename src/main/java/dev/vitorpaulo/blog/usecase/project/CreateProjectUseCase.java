@@ -6,13 +6,16 @@ import dev.vitorpaulo.blog.output.project.ProjectOutput;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.UUID;
+
 @Component
 @RequiredArgsConstructor
 public class CreateProjectUseCase {
 
     private final ProjectOutput projectOutput;
 
-    public ProjectModel execute(ProjectModel project, AuthorModel author) {
-        return projectOutput.save(project, author);
+    public ProjectModel execute(ProjectModel project, List<UUID> tagIds, AuthorModel author) {
+        return projectOutput.save(project, tagIds, author);
     }
 }

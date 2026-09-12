@@ -12,6 +12,7 @@ import dev.vitorpaulo.blog.input.response.PostResponse;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
+import dev.vitorpaulo.blog.output.post.PostOutput;
 import dev.vitorpaulo.blog.usecase.post.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +37,7 @@ class PostControllerTest {
     @Mock private GetPostBySlugUseCase getPostBySlugUseCase;
     @Mock private SearchPostUseCase searchPostUseCase;
     @Mock private PostInputMapper postInputMapper;
+    @Mock private PostOutput postOutput;
     @Mock private AuthorModel author;
     @Mock private PostModel postModel;
     @Mock private PostResponse postResponse;

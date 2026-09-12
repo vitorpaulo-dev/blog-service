@@ -7,6 +7,7 @@ import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.model.PostModel;
 import dev.vitorpaulo.blog.output.post.PostOutput;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -16,6 +17,6 @@ public class SearchPostUseCase {
     private final PostOutput postOutput;
 
     public PaginatedOutput<PostModel> execute(PaginatedInput<PostQueryModel> pageableInput, AuthorModel author) {
-        return postOutput.search(pageableInput, author);
+		return postOutput.search(pageableInput, author);
     }
 }

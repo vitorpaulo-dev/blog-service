@@ -5,21 +5,20 @@ import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.common.util.PostUtils;
 import dev.vitorpaulo.blog.domain.ProjectContentEntity;
 import dev.vitorpaulo.blog.domain.ProjectEntity;
-import dev.vitorpaulo.blog.output.mapper.ProjectMapper;
+import dev.vitorpaulo.blog.output.mapper.ProjectOutputMapper;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
+import dev.vitorpaulo.blog.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static dev.vitorpaulo.blog.common.util.RoleUtils.isAdmin;
@@ -29,12 +28,14 @@ import static dev.vitorpaulo.blog.common.util.RoleUtils.isAdmin;
 public class ProjectOutput {
 
 	private final ProjectRepository projectRepository;
-	private final ProjectMapper projectMapper;
+	private final ProjectOutputMapper projectOutputMapper;
 	private final AuthorRepository authorRepository;
+	private final TagRepository tagRepository;
 
+	@Transactional(readOnly = true)
 	public ProjectModel findById(UUID id) {
-		return projectRepository.findById(id)
-			.map(projectMapper::toModel)
+		return projectRepository.findByIdWithContents(id)
+			.map(project -> projectOutputMapper.toModel(project, Collections.emptyList()))
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
 	}
 
@@ -44,27 +45,28 @@ public class ProjectOutput {
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_SLUG_NOT_FOUND));
 		entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
 
-		return projectMapper.toModel(projectRepository.save(entity), language);
+		final var saved = projectRepository.save(entity);
+		return projectOutputMapper.toModel(saved, Collections.emptyList());
 	}
 
 	@Transactional
-	public ProjectModel save(ProjectModel project, AuthorModel author) {
+	public ProjectModel save(ProjectModel project, List<UUID> tagIds, AuthorModel author) {
 		final var firstContent = getFirstContent(project.translations());
 		final var slug = generateUniqueSlug(firstContent.title(), null);
 
 		final var entity = new ProjectEntity();
-		projectMapper.updateEntity(project, entity);
-		resetReactionCounts(entity);
+		projectOutputMapper.updateEntity(project, entity);
 		entity.setSlug(slug);
 
 		syncContents(entity, project.translations());
 		entity.setAuthors(authorRepository.findAllById(List.of(author.id())));
+		if (tagIds != null) entity.setTags(tagRepository.findAllById(tagIds));
 
-		return projectMapper.toModel(projectRepository.save(entity));
+		return projectOutputMapper.toModel(projectRepository.save(entity), tagIds);
 	}
 
 	@Transactional
-	public ProjectModel update(ProjectModel project, AuthorModel author) {
+	public ProjectModel update(ProjectModel project, List<UUID> tagIds, AuthorModel author) {
 		final var entity = projectRepository.findByIdWithAuthor(project.id(), author.id(), isAdmin(author.role()))
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
 
@@ -73,14 +75,16 @@ public class ProjectOutput {
 		final var titleChanged = firstContent.title() != null
 			&& !firstContent.title().equalsIgnoreCase(previousTitle);
 
-		projectMapper.updateEntity(project, entity);
+		projectOutputMapper.updateEntity(project, entity);
 		if (titleChanged) {
 			entity.setSlug(generateUniqueSlug(firstContent.title(), entity.getId()));
 		}
 
 		syncContents(entity, project.translations());
 
-		return projectMapper.toModel(projectRepository.save(entity));
+		entity.setTags(tagRepository.findAllById(Objects.requireNonNullElse(tagIds, Collections.emptyList())));
+
+		return projectOutputMapper.toModel(projectRepository.save(entity), tagIds);
 	}
 
 	@Transactional
@@ -88,39 +92,48 @@ public class ProjectOutput {
 		projectRepository.deleteByIdWithAuthor(ids, author.id(), isAdmin(author.role()));
 	}
 
+	@Transactional(readOnly = true)
 	public PaginatedOutput<ProjectModel> search(PaginatedInput<ProjectQueryModel> pageableInput, AuthorModel author) {
 		final var language = pageableInput.query().language();
 		final var pageable = PageRequest.of(pageableInput.page(), pageableInput.size());
-		final var result = projectRepository.search(
+		final var page = projectRepository.search(
 				pageableInput.query().query(),
 				pageableInput.query().authorId(),
+				pageableInput.query().tagId(),
 				language != null ? language.name() : null,
 				author != null,
 				pageable,
 				mapSortProperty(pageableInput.sort(), pageableInput.direction())
-			)
-			.map(entity -> projectMapper.toModel(entity, language));
+			);
 
 		return new PaginatedOutput<>(
-			result.getContent(),
-			result.getNumber(),
-			result.getSize(),
-			result.getTotalElements(),
-			result.getTotalPages()
+			page.stream()
+				.map(project -> projectOutputMapper.toModel(project, Collections.emptyList()))
+				.peek(project -> {
+					final var contents = project.translations();
+					if (contents.size() <= 1) return;
+
+					contents.keySet().removeIf(key -> key != language);
+				})
+				.toList(),
+			page.getNumber(),
+			page.getSize(),
+			page.getTotalElements(),
+			page.getTotalPages()
 		);
 	}
 
-	public List<ProjectModel> findAllById(List<UUID> ids) {
-		if (ids == null || ids.isEmpty()) return List.of();
-		return projectRepository.findAllById(ids).stream()
-			.map(projectMapper::toModel)
-			.toList();
-	}
-
+	@Transactional(readOnly = true)
 	public List<ProjectModel> findAllById(List<UUID> ids, Language language) {
-		if (ids == null || ids.isEmpty()) return List.of();
-		return projectRepository.findAllById(ids).stream()
-			.map(entity -> projectMapper.toModel(entity, language))
+		return projectRepository.findAllByIdWithSingleContent(ids, language)
+			.stream()
+			.map(project -> projectOutputMapper.toModel(project, Collections.emptyList()))
+			.peek(project -> {
+				final var contents = project.translations();
+				if (contents.size() <= 1) return;
+
+				contents.keySet().removeIf(key -> key != language);
+			})
 			.toList();
 	}
 
@@ -134,7 +147,7 @@ public class ProjectOutput {
 				existing.setTitle(model.title());
 				existing.setDescription(model.description());
 			} else {
-				final var content = projectMapper.toContentEntity(model);
+				final var content = projectOutputMapper.toContentEntity(model);
 				content.setLanguage(lang);
 				content.setProject(entity);
 				entity.getContents().add(content);
@@ -142,14 +155,6 @@ public class ProjectOutput {
 		});
 
 		entity.getContents().removeIf(c -> !translations.containsKey(c.getLanguage()));
-	}
-
-	private void resetReactionCounts(ProjectEntity entity) {
-		entity.setCelebrateCount(0L);
-		entity.setGeniusCount(0L);
-		entity.setHelpCount(0L);
-		entity.setViewCount(0L);
-		entity.setLoveCount(0L);
 	}
 
 	private ProjectContentModel getFirstContent(Map<Language, ProjectContentModel> translations) {

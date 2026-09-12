@@ -6,21 +6,28 @@ import dev.vitorpaulo.blog.domain.ProjectContentEntity;
 import dev.vitorpaulo.blog.domain.ProjectEntity;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
-import dev.vitorpaulo.blog.output.mapper.ProjectMapper;
+import dev.vitorpaulo.blog.output.mapper.ProjectOutputMapper;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
+import dev.vitorpaulo.blog.repository.TagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -30,14 +37,19 @@ import static org.mockito.Mockito.*;
 class ProjectOutputTest {
 
     @Mock private ProjectRepository projectRepository;
-    @Mock private ProjectMapper projectMapper;
+    @Mock private ProjectOutputMapper projectOutputMapper;
     @Mock private AuthorRepository authorRepository;
+    @Mock private TagRepository tagRepository;
     @Mock private AuthorModel author;
     @Mock private ProjectModel project;
     @Mock private ProjectModel expectedResult;
+    @Mock private ProjectModel secondResult;
     @Mock private ProjectEntity projectEntity;
+    @Mock private ProjectEntity secondProjectEntity;
     @Mock private ProjectContentEntity existingContent;
+    @Mock private ProjectContentEntity newContent;
     @Mock private ProjectContentModel projectContentModel;
+    @Mock private ProjectQueryModel projectQueryModel;
 
     @InjectMocks
     private ProjectOutput projectOutput;
@@ -49,20 +61,20 @@ class ProjectOutputTest {
     }
 
     @Test
-    void findById_found_returnsProject() {
-        var entityId = UUID.randomUUID();
+    void findById_found_mapsWithEmptyTagIds() {
+        var id = UUID.randomUUID();
+        when(projectRepository.findByIdWithContents(id)).thenReturn(Optional.of(projectEntity));
+        when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
 
-        when(projectRepository.findById(entityId)).thenReturn(Optional.of(projectEntity));
-        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
-
-        var result = projectOutput.findById(entityId);
+        var result = projectOutput.findById(id);
 
         assertEquals(expectedResult, result);
+        verify(projectRepository).findByIdWithContents(id);
     }
 
     @Test
     void findById_notFound_throwsNotFoundException() {
-        when(projectRepository.findById(any())).thenReturn(Optional.empty());
+        when(projectRepository.findByIdWithContents(any())).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class, () -> projectOutput.findById(UUID.randomUUID()));
         assertEquals(ExceptionCode.PROJECT_NOT_FOUND, ex.getCode());
@@ -73,13 +85,12 @@ class ProjectOutputTest {
         when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
         when(projectEntity.getViewCount()).thenReturn(5L);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity, Language.ENGLISH)).thenReturn(expectedResult);
+        when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
 
         var result = projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH);
 
         verify(projectEntity).setViewCount(6L);
         assertEquals(expectedResult, result);
-        verify(projectRepository).save(projectEntity);
     }
 
     @Test
@@ -87,7 +98,6 @@ class ProjectOutputTest {
         when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
         when(projectEntity.getViewCount()).thenReturn(null);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity, Language.ENGLISH)).thenReturn(expectedResult);
 
         projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH);
 
@@ -104,240 +114,174 @@ class ProjectOutputTest {
     }
 
     @Test
-    void save_withEnglishTranslation_savesProject() {
-        var translations = Map.of(Language.ENGLISH, projectContentModel);
-        when(project.translations()).thenReturn(translations);
+    void save_validRequest_savesWithSlugFromTitle() {
+        when(project.translations()).thenReturn(Map.of(Language.ENGLISH, projectContentModel));
         when(projectContentModel.title()).thenReturn("My Project");
-
-        var contentEntity = new ProjectContentEntity();
-        when(projectMapper.toContentEntity(projectContentModel)).thenReturn(contentEntity);
-
-        when(projectRepository.countBySlugAndIdNot(anyString(), isNull())).thenReturn(0L);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+        when(projectOutputMapper.toContentEntity(projectContentModel)).thenReturn(newContent);
+        when(newContent.getLanguage()).thenReturn(Language.ENGLISH);
+        when(projectRepository.countBySlugAndIdNot("my-project", null)).thenReturn(0L);
         when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(authorRepository.findAllById(anyList())).thenReturn(List.of());
 
-        projectOutput.save(project, author);
+        projectOutput.save(project, null, author);
 
-        verify(projectRepository).save(any(ProjectEntity.class));
+        verify(projectRepository).save(argThat(e -> "my-project".equals(e.getSlug())));
     }
 
     @Test
-    void save_withConflict_generatesUniqueSlug() {
-        var translations = Map.of(Language.ENGLISH, projectContentModel);
-        when(project.translations()).thenReturn(translations);
+    void save_slugConflict_appendsIncrementedCounter() {
+        when(project.translations()).thenReturn(Map.of(Language.ENGLISH, projectContentModel));
         when(projectContentModel.title()).thenReturn("My Project");
-
-        var contentEntity = new ProjectContentEntity();
-        when(projectMapper.toContentEntity(projectContentModel)).thenReturn(contentEntity);
-
+        when(projectOutputMapper.toContentEntity(projectContentModel)).thenReturn(newContent);
+        when(newContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(projectRepository.countBySlugAndIdNot("my-project", null)).thenReturn(2L);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
         when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(authorRepository.findAllById(anyList())).thenReturn(List.of());
 
-        projectOutput.save(project, author);
+        projectOutput.save(project, null, author);
 
-        verify(projectRepository).save(argThat(e -> e.getSlug().equals("my-project-3")));
+        verify(projectRepository).save(argThat(e -> "my-project-3".equals(e.getSlug())));
     }
 
     @Test
-    void save_emptyTranslations_usesEmptyTitle() {
-        when(project.translations()).thenReturn(Map.of());
-
-        when(projectRepository.countBySlugAndIdNot(anyString(), isNull())).thenReturn(0L);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
-        when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(authorRepository.findAllById(anyList())).thenReturn(List.of());
-
-        projectOutput.save(project, author);
-
-        verify(projectRepository).save(any(ProjectEntity.class));
-    }
-
-    @Test
-    void save_nullTranslations_usesEmptyTitle() {
+    void save_nullTranslations_usesFallbackSlug() {
         when(project.translations()).thenReturn(null);
-
-        when(projectRepository.countBySlugAndIdNot(anyString(), isNull())).thenReturn(0L);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
+        when(projectRepository.countBySlugAndIdNot("post", null)).thenReturn(0L);
         when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(authorRepository.findAllById(anyList())).thenReturn(List.of());
 
-        projectOutput.save(project, author);
+        projectOutput.save(project, null, author);
 
-        verify(projectRepository).save(any(ProjectEntity.class));
+        verify(projectRepository).save(argThat(e -> "post".equals(e.getSlug())));
     }
 
     @Test
-    void save_resetsReactionCounts() {
-        var translations = Map.of(Language.ENGLISH, projectContentModel);
-        when(project.translations()).thenReturn(translations);
-        when(projectContentModel.title()).thenReturn("Test");
-
-        var contentEntity = new ProjectContentEntity();
-        when(projectMapper.toContentEntity(projectContentModel)).thenReturn(contentEntity);
-
+    void save_withTagIds_resolvesTags() {
+        when(project.translations()).thenReturn(Map.of(Language.ENGLISH, projectContentModel));
+        when(projectContentModel.title()).thenReturn("My Project");
+        when(projectOutputMapper.toContentEntity(projectContentModel)).thenReturn(newContent);
+        when(newContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(projectRepository.countBySlugAndIdNot(anyString(), isNull())).thenReturn(0L);
-        when(projectMapper.toModel(any(ProjectEntity.class))).thenReturn(expectedResult);
         when(projectRepository.save(any(ProjectEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(authorRepository.findAllById(anyList())).thenReturn(List.of());
 
-        projectOutput.save(project, author);
+        var tagIds = List.of(UUID.randomUUID());
+        projectOutput.save(project, tagIds, author);
 
-        verify(projectRepository).save(argThat(e ->
-            e.getViewCount() == 0L &&
-            e.getLoveCount() == 0L &&
-            e.getCelebrateCount() == 0L &&
-            e.getGeniusCount() == 0L &&
-            e.getHelpCount() == 0L
-        ));
+        verify(tagRepository).findAllById(tagIds);
     }
 
     @Test
     void update_notFound_throwsNotFoundException() {
         var projectId = UUID.randomUUID();
         when(project.id()).thenReturn(projectId);
-
         when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.empty());
 
-        var ex = assertThrows(NotFoundException.class,
-                () -> projectOutput.update(project, author));
+        var ex = assertThrows(NotFoundException.class, () -> projectOutput.update(project, null, author));
         assertEquals(ExceptionCode.PROJECT_NOT_FOUND, ex.getCode());
-    }
-
-    @Test
-    void update_existingContent_updatesInPlace() {
-        var projectId = UUID.randomUUID();
-        var translations = Map.of(Language.ENGLISH, projectContentModel);
-        when(project.translations()).thenReturn(translations);
-        when(project.id()).thenReturn(projectId);
-        when(projectContentModel.title()).thenReturn("New Title");
-        when(projectContentModel.description()).thenReturn("New Description");
-
-        when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
-        when(existingContent.getTitle()).thenReturn("Old Title");
-
-        var contents = new ArrayList<>(List.of(existingContent));
-        when(projectEntity.getContents()).thenReturn(contents);
-
-        when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.of(projectEntity));
-        when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
-
-        projectOutput.update(project, author);
-
-        verify(existingContent).setTitle("New Title");
-        verify(existingContent).setDescription("New Description");
-        assertEquals(1, projectEntity.getContents().size());
-    }
-
-    @Test
-    void update_newLanguage_addsAndRemovesOld() {
-        var projectId = UUID.randomUUID();
-        var translations = Map.of(Language.PORTUGUESE, projectContentModel);
-        when(project.translations()).thenReturn(translations);
-        when(project.id()).thenReturn(projectId);
-        when(projectContentModel.title()).thenReturn("Titulo");
-
-        when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
-        when(existingContent.getTitle()).thenReturn("Old Title");
-
-        var contents = new ArrayList<>(List.of(existingContent));
-        when(projectEntity.getContents()).thenReturn(contents);
-
-        var newContent = mock(ProjectContentEntity.class);
-        when(newContent.getLanguage()).thenReturn(Language.PORTUGUESE);
-        when(projectMapper.toContentEntity(projectContentModel)).thenReturn(newContent);
-
-        when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.of(projectEntity));
-        when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
-
-        projectOutput.update(project, author);
-
-        verify(newContent).setLanguage(Language.PORTUGUESE);
-        verify(newContent).setProject(projectEntity);
-        assertEquals(1, contents.size());
     }
 
     @Test
     void update_titleChanged_regeneratesSlug() {
         var projectId = UUID.randomUUID();
-        var translations = Map.of(Language.ENGLISH, projectContentModel);
-        when(project.translations()).thenReturn(translations);
+        when(project.translations()).thenReturn(Map.of(Language.ENGLISH, projectContentModel));
         when(project.id()).thenReturn(projectId);
         when(projectContentModel.title()).thenReturn("Changed Title");
-
         when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(existingContent.getTitle()).thenReturn("Original Title");
-
         var contents = new ArrayList<>(List.of(existingContent));
-        when(projectEntity.getId()).thenReturn(projectId);
         when(projectEntity.getContents()).thenReturn(contents);
-
+        when(projectEntity.getId()).thenReturn(projectId);
         when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.of(projectEntity));
         when(projectRepository.countBySlugAndIdNot("changed-title", projectId)).thenReturn(0L);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
-        projectOutput.update(project, author);
+        projectOutput.update(project, null, author);
 
         verify(projectEntity).setSlug("changed-title");
     }
 
     @Test
-    void update_titleSame_keepsSlug() {
+    void update_titleUnchanged_keepsSlug() {
         var projectId = UUID.randomUUID();
-        var translations = Map.of(Language.ENGLISH, projectContentModel);
-        when(project.translations()).thenReturn(translations);
+        when(project.translations()).thenReturn(Map.of(Language.ENGLISH, projectContentModel));
         when(project.id()).thenReturn(projectId);
         when(projectContentModel.title()).thenReturn("Same Title");
-
         when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(existingContent.getTitle()).thenReturn("Same Title");
-
         var contents = new ArrayList<>(List.of(existingContent));
         when(projectEntity.getContents()).thenReturn(contents);
-
         when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.of(projectEntity));
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
-        projectOutput.update(project, author);
+        projectOutput.update(project, null, author);
 
         verify(projectEntity, never()).setSlug(anyString());
         verify(projectRepository, never()).countBySlugAndIdNot(anyString(), any());
     }
 
     @Test
-    void update_nonAdmin_passesFalseFlag() {
+    void update_existingTranslation_updatesInPlace() {
+        var projectId = UUID.randomUUID();
+        when(project.translations()).thenReturn(Map.of(Language.ENGLISH, projectContentModel));
+        when(project.id()).thenReturn(projectId);
+        when(projectContentModel.title()).thenReturn("New Title");
+        when(projectContentModel.description()).thenReturn("New Description");
+        when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
+        when(existingContent.getTitle()).thenReturn("Old Title");
+        var contents = new ArrayList<>(List.of(existingContent));
+        when(projectEntity.getContents()).thenReturn(contents);
+        when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.of(projectEntity));
+        when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
+
+        projectOutput.update(project, null, author);
+
+        verify(existingContent).setTitle("New Title");
+        verify(existingContent).setDescription("New Description");
+        assertEquals(1, contents.size());
+    }
+
+    @Test
+    void update_newLanguage_addsTranslationAndRemovesOld() {
+        var projectId = UUID.randomUUID();
+        when(project.translations()).thenReturn(Map.of(Language.PORTUGUESE, projectContentModel));
+        when(project.id()).thenReturn(projectId);
+        when(projectContentModel.title()).thenReturn("Titulo");
+        when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
+        when(existingContent.getTitle()).thenReturn("Old Title");
+        var contents = new ArrayList<>(List.of(existingContent));
+        when(projectEntity.getContents()).thenReturn(contents);
+        when(projectOutputMapper.toContentEntity(projectContentModel)).thenReturn(newContent);
+        when(newContent.getLanguage()).thenReturn(Language.PORTUGUESE);
+        when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.of(projectEntity));
+        when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
+
+        projectOutput.update(project, null, author);
+
+        verify(newContent).setLanguage(Language.PORTUGUESE);
+        verify(newContent).setProject(projectEntity);
+        assertEquals(1, contents.size());
+        assertSame(newContent, contents.getFirst());
+    }
+
+    @Test
+    void update_nonAdmin_requiresOwnership() {
         var projectId = UUID.randomUUID();
         when(author.id()).thenReturn(UUID.randomUUID());
         when(author.role()).thenReturn("org:member");
-
-        var translations = Map.of(Language.ENGLISH, projectContentModel);
-        when(project.translations()).thenReturn(translations);
+        when(project.translations()).thenReturn(Map.of(Language.ENGLISH, projectContentModel));
         when(project.id()).thenReturn(projectId);
         when(projectContentModel.title()).thenReturn("Title");
-
         when(existingContent.getLanguage()).thenReturn(Language.ENGLISH);
         when(existingContent.getTitle()).thenReturn("Title");
-
         var contents = new ArrayList<>(List.of(existingContent));
         when(projectEntity.getContents()).thenReturn(contents);
-
         when(projectRepository.findByIdWithAuthor(projectId, author.id(), false)).thenReturn(Optional.of(projectEntity));
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
 
-        projectOutput.update(project, author);
+        projectOutput.update(project, null, author);
 
         verify(projectRepository).findByIdWithAuthor(projectId, author.id(), false);
     }
 
     @Test
-    void deleteAll_withAuthor_delegatesToRepository() {
+    void deleteAll_admin_bypassesOwnershipCheck() {
         var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
 
         projectOutput.deleteAll(ids, author);
@@ -346,7 +290,7 @@ class ProjectOutputTest {
     }
 
     @Test
-    void deleteAll_nonAdmin_passesFalseFlag() {
+    void deleteAll_nonAdmin_requiresOwnership() {
         var ids = List.of(UUID.randomUUID());
         when(author.id()).thenReturn(UUID.randomUUID());
         when(author.role()).thenReturn("org:member");
@@ -357,115 +301,144 @@ class ProjectOutputTest {
     }
 
     @Test
-    void search_withLanguage_returnsPaginatedResults() {
-        Page<ProjectEntity> page = new PageImpl<>(List.of(projectEntity));
+    void search_propagatesLanguageAndShowDraftsToRepository() {
+        when(projectQueryModel.query()).thenReturn("spring");
+        when(projectQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        when(projectRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
-                .thenReturn(page);
-        when(projectMapper.toModel(eq(projectEntity), eq(Language.ENGLISH))).thenReturn(expectedResult);
+        projectOutput.search(input(projectQueryModel, "createdAt", Sort.Direction.DESC), null);
 
-        var queryModel = mock(ProjectQueryModel.class);
-        when(queryModel.language()).thenReturn(Language.ENGLISH);
-
-        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
-
-        var result = projectOutput.search(input, null);
-
-        assertNotNull(result);
-        assertEquals(1, result.content().size());
+        verify(projectRepository).search(eq("spring"), isNull(), isNull(), eq("ENGLISH"), eq(false),
+                any(PageRequest.class), eq("created_at DESC, updated_at DESC"));
     }
 
     @Test
     void search_nullLanguage_passesNullToRepository() {
-        Page<ProjectEntity> page = new PageImpl<>(List.of());
+        when(projectQueryModel.language()).thenReturn(null);
+        when(projectRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        when(projectRepository.search(any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString()))
-                .thenReturn(page);
+        projectOutput.search(input(projectQueryModel, "createdAt", Sort.Direction.DESC), null);
 
-        var queryModel = mock(ProjectQueryModel.class);
-        when(queryModel.language()).thenReturn(null);
-
-        var input = new PaginatedInput<>(queryModel, 0, 10, "createdAt", Sort.Direction.DESC);
-
-        projectOutput.search(input, null);
-
-        verify(projectRepository).search(isNull(), isNull(), isNull(), eq(false), any(PageRequest.class), anyString());
+        verify(projectRepository).search(any(), any(), any(), isNull(), eq(false),
+                any(PageRequest.class), anyString());
     }
 
     @Test
-    void search_viewCountSort_mapsCorrectly() {
-        Page<ProjectEntity> page = new PageImpl<>(List.of());
-        when(projectRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
-                .thenReturn(page);
+    void search_withAuthor_showsDrafts() {
+        when(projectQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        var queryModel = mock(ProjectQueryModel.class);
-        when(queryModel.language()).thenReturn(Language.ENGLISH);
+        projectOutput.search(input(projectQueryModel, "createdAt", Sort.Direction.DESC), author);
 
-        var input = new PaginatedInput<>(queryModel, 0, 10, "viewCount", Sort.Direction.ASC);
-
-        projectOutput.search(input, author);
-
-        verify(projectRepository).search(any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("view_count ASC"));
+        verify(projectRepository).search(any(), any(), any(), any(), eq(true),
+                any(PageRequest.class), anyString());
     }
 
     @Test
-    void search_unknownField_defaultsToCreatedAtSort() {
-        Page<ProjectEntity> page = new PageImpl<>(List.of());
-        when(projectRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
-                .thenReturn(page);
+    void search_mapsSortProperty_viewCount() {
+        when(projectQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        var queryModel = mock(ProjectQueryModel.class);
-        when(queryModel.language()).thenReturn(Language.ENGLISH);
+        projectOutput.search(input(projectQueryModel, "viewCount", Sort.Direction.ASC), null);
 
-        var input = new PaginatedInput<>(queryModel, 0, 10, "unknownField", Sort.Direction.DESC);
-
-        projectOutput.search(input, author);
-
-        verify(projectRepository).search(any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("created_at DESC, updated_at DESC"));
+        verify(projectRepository).search(any(), any(), any(), any(), eq(false),
+                any(PageRequest.class), eq("view_count ASC"));
     }
 
     @Test
-    void search_slugSort_mapsCorrectly() {
-        Page<ProjectEntity> page = new PageImpl<>(List.of());
-        when(projectRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
-                .thenReturn(page);
+    void search_mapsSortProperty_slug() {
+        when(projectQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        var queryModel = mock(ProjectQueryModel.class);
-        when(queryModel.language()).thenReturn(Language.ENGLISH);
+        projectOutput.search(input(projectQueryModel, "slug", Sort.Direction.DESC), null);
 
-        var input = new PaginatedInput<>(queryModel, 0, 10, "slug", Sort.Direction.ASC);
-
-        projectOutput.search(input, author);
-
-        verify(projectRepository).search(any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("slug ASC"));
+        verify(projectRepository).search(any(), any(), any(), any(), eq(false),
+                any(PageRequest.class), eq("slug DESC"));
     }
 
     @Test
-    void search_reactionCountSort_mapsCorrectly() {
-        Page<ProjectEntity> page = new PageImpl<>(List.of());
-        when(projectRepository.search(any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
-                .thenReturn(page);
+    void search_unknownSortField_defaultsToCreatedAt() {
+        when(projectQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        var queryModel = mock(ProjectQueryModel.class);
-        when(queryModel.language()).thenReturn(Language.ENGLISH);
+        projectOutput.search(input(projectQueryModel, "unknownField", Sort.Direction.DESC), null);
 
-        var input = new PaginatedInput<>(queryModel, 0, 10, "reactionCount", Sort.Direction.DESC);
-
-        projectOutput.search(input, author);
-
-        verify(projectRepository).search(any(), any(), any(), anyBoolean(), any(PageRequest.class), eq("reaction_count DESC"));
+        verify(projectRepository).search(any(), any(), any(), any(), eq(false),
+                any(PageRequest.class), eq("created_at DESC, updated_at DESC"));
     }
 
     @Test
-    void findAllById_withIds_returnsMappedResults() {
-        var ids = List.of(UUID.randomUUID());
-        when(projectRepository.findAllById(ids)).thenReturn(List.of(projectEntity));
-        when(projectMapper.toModel(projectEntity, Language.ENGLISH)).thenReturn(expectedResult);
+    void search_emptyPage_returnsEmptyContent() {
+        when(projectQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        var result = projectOutput.findAllById(ids, Language.ENGLISH);
+        var result = projectOutput.search(input(projectQueryModel, "createdAt", Sort.Direction.DESC), null);
 
-        assertEquals(1, result.size());
-        assertEquals(expectedResult, result.getFirst());
+        assertTrue(result.content().isEmpty());
+        verifyNoInteractions(projectOutputMapper);
+    }
+
+    @Test
+    void search_preservesPageOrder() {
+        when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
+        when(projectOutputMapper.toModel(secondProjectEntity, List.of())).thenReturn(secondResult);
+        when(expectedResult.translations()).thenReturn(Map.of());
+        when(secondResult.translations()).thenReturn(Map.of());
+        when(projectQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of(projectEntity, secondProjectEntity)));
+
+        var result = projectOutput.search(input(projectQueryModel, "createdAt", Sort.Direction.DESC), null);
+
+        assertEquals(List.of(expectedResult, secondResult), result.content());
+    }
+
+    // Committed behavior: search filters non-requested languages in Java (removeIf).
+    @Test
+    void search_filtersOtherLanguagesInJava() {
+        var translations = new HashMap<Language, ProjectContentModel>();
+        translations.put(Language.ENGLISH, null);
+        translations.put(Language.PORTUGUESE, null);
+        when(projectOutputMapper.toModel(eq(projectEntity), anyList())).thenReturn(expectedResult);
+        when(expectedResult.translations()).thenReturn(translations);
+        when(projectQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of(projectEntity)));
+
+        var result = projectOutput.search(input(projectQueryModel, "createdAt", Sort.Direction.DESC), null);
+
+        assertEquals(1, result.content().size());
+        assertTrue(translations.containsKey(Language.ENGLISH));
+        assertFalse(translations.containsKey(Language.PORTUGUESE));
+    }
+
+    @Test
+    void search_isTransactionalReadOnly() throws NoSuchMethodException {
+        Method method = ProjectOutput.class.getMethod("search", PaginatedInput.class, AuthorModel.class);
+        var transactional = method.getAnnotation(Transactional.class);
+
+        assertNotNull(transactional);
+        assertTrue(transactional.readOnly());
+    }
+
+    @Test
+    void findAllById_usesSingleContentFetch() {
+        var id = UUID.randomUUID();
+        when(projectRepository.findAllByIdWithSingleContent(List.of(id), Language.ENGLISH)).thenReturn(List.of(projectEntity));
+        when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
+        when(expectedResult.translations()).thenReturn(Map.of());
+
+        var result = projectOutput.findAllById(List.of(id), Language.ENGLISH);
+
+        assertEquals(List.of(expectedResult), result);
+        verify(projectRepository, never()).findAllById(anyList());
     }
 
     @Test
@@ -482,22 +455,33 @@ class ProjectOutputTest {
         assertTrue(result.isEmpty());
     }
 
+    // Committed behavior: batch filters non-requested languages in Java (removeIf).
     @Test
-    void findAllByIdWithoutLanguage_withIds_returnsMappedResults() {
-        var ids = List.of(UUID.randomUUID());
-        when(projectRepository.findAllById(ids)).thenReturn(List.of(projectEntity));
-        when(projectMapper.toModel(projectEntity)).thenReturn(expectedResult);
+    void findAllById_filtersOtherLanguagesInJava() {
+        var translations = new HashMap<Language, ProjectContentModel>();
+        translations.put(Language.PORTUGUESE, null);
+        translations.put(Language.ENGLISH, null);
+        when(projectRepository.findAllByIdWithSingleContent(anyList(), eq(Language.PORTUGUESE))).thenReturn(List.of(projectEntity));
+        when(projectOutputMapper.toModel(eq(projectEntity), anyList())).thenReturn(expectedResult);
+        when(expectedResult.translations()).thenReturn(translations);
 
-        var result = projectOutput.findAllById(ids);
+        var result = projectOutput.findAllById(List.of(UUID.randomUUID()), Language.PORTUGUESE);
 
         assertEquals(1, result.size());
-        assertEquals(expectedResult, result.getFirst());
+        assertTrue(translations.containsKey(Language.PORTUGUESE));
+        assertFalse(translations.containsKey(Language.ENGLISH));
     }
 
     @Test
-    void findAllByIdWithoutLanguage_nullIds_returnsEmptyList() {
-        var result = projectOutput.findAllById(null);
+    void findAllById_isTransactionalReadOnly() throws NoSuchMethodException {
+        Method method = ProjectOutput.class.getMethod("findAllById", List.class, Language.class);
+        var transactional = method.getAnnotation(Transactional.class);
 
-        assertTrue(result.isEmpty());
+        assertNotNull(transactional);
+        assertTrue(transactional.readOnly());
+    }
+
+    private PaginatedInput<ProjectQueryModel> input(ProjectQueryModel query, String sort, Sort.Direction direction) {
+        return new PaginatedInput<>(query, 0, 10, sort, direction);
     }
 }

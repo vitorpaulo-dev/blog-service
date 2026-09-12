@@ -14,7 +14,6 @@ import dev.vitorpaulo.blog.input.response.ProjectResponse;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
-import dev.vitorpaulo.blog.output.project.ProjectOutput;
 import dev.vitorpaulo.blog.usecase.project.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,8 +37,8 @@ class ProjectControllerTest {
     @Mock private GetProjectByIdUseCase getProjectByIdUseCase;
     @Mock private GetProjectBySlugUseCase getProjectBySlugUseCase;
     @Mock private SearchProjectUseCase searchProjectUseCase;
+    @Mock private GetProjectByBatchUseCase getProjectByBatchUseCase;
     @Mock private ProjectInputMapper projectInputMapper;
-    @Mock private ProjectOutput projectOutput;
     @Mock private AuthorModel author;
     @Mock private ProjectModel projectModel;
     @Mock private ProjectResponse projectResponse;
@@ -57,27 +56,29 @@ class ProjectControllerTest {
 
     @Test
     void create_validRequest_returnsCreatedResponse() {
+        when(createRequest.tagIds()).thenReturn(null);
         when(projectInputMapper.toModel(createRequest)).thenReturn(projectModel);
-        when(createProjectUseCase.execute(projectModel, author)).thenReturn(projectModel);
+        when(createProjectUseCase.execute(projectModel, null, author)).thenReturn(projectModel);
         when(projectInputMapper.toResponse(projectModel)).thenReturn(projectResponse);
 
         var result = projectController.create(createRequest, author);
 
         assertEquals(projectResponse, result);
-        verify(createProjectUseCase).execute(projectModel, author);
+        verify(createProjectUseCase).execute(projectModel, null, author);
     }
 
     @Test
     void update_validRequest_returnsUpdatedResponse() {
         var id = UUID.randomUUID();
+        when(updateRequest.tagIds()).thenReturn(null);
         when(projectInputMapper.toModel(updateRequest, id)).thenReturn(projectModel);
-        when(updateProjectUseCase.execute(projectModel, author)).thenReturn(projectModel);
+        when(updateProjectUseCase.execute(projectModel, null, author)).thenReturn(projectModel);
         when(projectInputMapper.toResponse(projectModel)).thenReturn(projectResponse);
 
         var result = projectController.update(id, updateRequest, author);
 
         assertEquals(projectResponse, result);
-        verify(updateProjectUseCase).execute(projectModel, author);
+        verify(updateProjectUseCase).execute(projectModel, null, author);
     }
 
     @Test
@@ -135,7 +136,7 @@ class ProjectControllerTest {
         var ids = List.of(UUID.randomUUID());
         when(batchRequest.ids()).thenReturn(ids);
         when(batchRequest.language()).thenReturn(Language.ENGLISH);
-        when(projectOutput.findAllById(ids, Language.ENGLISH)).thenReturn(List.of(projectModel));
+        when(getProjectByBatchUseCase.execute(ids, Language.ENGLISH)).thenReturn(List.of(projectModel));
         when(projectInputMapper.toResponse(projectModel)).thenReturn(projectResponse);
 
         var result = projectController.batch(batchRequest);

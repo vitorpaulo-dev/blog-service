@@ -4,7 +4,7 @@ import com.clerk.backend_api.Clerk;
 import com.clerk.backend_api.models.operations.ListOrganizationMembershipsRequest;
 import dev.vitorpaulo.blog.common.exception.InternalException;
 import dev.vitorpaulo.blog.common.util.PostUtils;
-import dev.vitorpaulo.blog.output.mapper.AuthorMapper;
+import dev.vitorpaulo.blog.output.mapper.AuthorOutputMapper;
 import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 public class AuthorOutput {
 
     private final AuthorRepository authorRepository;
-    private final AuthorMapper authorMapper;
+    private final AuthorOutputMapper authorOutputMapper;
     private final Clerk clerk;
 
     @Value("${clerk.organization-id}")
@@ -56,7 +56,7 @@ public class AuthorOutput {
             .findFirst()
             .orElseThrow(InternalException::new);
 
-        return authorMapper.toModel(author, organization.roleName().orElseThrow(InternalException::new));
+        return authorOutputMapper.toModel(author, organization.roleName().orElseThrow(InternalException::new));
     }
 
     private String generateUniqueSlug(String name, java.util.UUID currentId) {

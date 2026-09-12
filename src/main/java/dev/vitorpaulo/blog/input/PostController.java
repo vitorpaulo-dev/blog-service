@@ -11,6 +11,7 @@ import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
 import dev.vitorpaulo.blog.input.response.PostResponse;
 import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.model.Language;
+import dev.vitorpaulo.blog.output.post.PostOutput;
 import dev.vitorpaulo.blog.usecase.post.CreatePostUseCase;
 import dev.vitorpaulo.blog.usecase.post.DeletePostUseCase;
 import dev.vitorpaulo.blog.usecase.post.GetPostByIdUseCase;
@@ -23,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -39,6 +41,7 @@ public class PostController {
     private final SearchPostUseCase searchPostUseCase;
 
     private final PostInputMapper postInputMapper;
+    private final PostOutput postOutput;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

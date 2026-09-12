@@ -15,9 +15,23 @@ import java.util.UUID;
 
 public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
 
+	@Query("SELECT p FROM ProjectEntity p LEFT JOIN p.contents WHERE p.id = :id")
+	Optional<ProjectEntity> findByIdWithContents(UUID id);
+
+	@Query("""
+		SELECT DISTINCT p FROM ProjectEntity p
+		JOIN p.contents c
+		WHERE p.id IN :ids
+		  AND c.id = COALESCE(
+			  (SELECT pc.id FROM ProjectContentEntity pc WHERE pc.project = p AND pc.language = :language),
+			  (SELECT pc2.id FROM ProjectContentEntity pc2 WHERE pc2.project = p ORDER BY pc2.language LIMIT 1)
+		  )
+	""")
+	List<ProjectEntity> findAllByIdWithSingleContent(List<UUID> ids, Language language);
+
 	@Query("""
 		SELECT p FROM ProjectEntity p
-		JOIN p.contents c
+		JOIN FETCH p.contents c
 		WHERE p.slug = :slug
 		  AND c.id = COALESCE(
 			  (SELECT pc.id FROM ProjectContentEntity pc WHERE pc.project = p AND pc.language = :language),
@@ -51,6 +65,15 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
                     FROM project_author pa
                     WHERE pa.project_id = p.id
                       AND pa.author_id = :authorId
+                )
+            )
+            AND (
+                :tagId IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM project_tag pt
+                    WHERE pt.project_id = p.id
+                      AND pt.tag_id = :tagId
                 )
             )
             AND (
@@ -92,6 +115,15 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
                 )
             )
             AND (
+                :tagId IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM project_tag pt
+                    WHERE pt.project_id = p.id
+                      AND pt.tag_id = :tagId
+                )
+            )
+            AND (
                 :query IS NULL
                 OR pc.search_vector @@ websearch_to_tsquery('simple', :query)
             )
@@ -99,12 +131,13 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
         nativeQuery = true
     )
     Page<ProjectEntity> search(
-        @Param("query") String query,
-        @Param("authorId") UUID authorId,
-        @Param("language") String language,
-        @Param("showDrafts") boolean showDrafts,
+        String query,
+        UUID authorId,
+        UUID tagId,
+        String language,
+        boolean showDrafts,
         Pageable pageable,
-        @Param("sort") String sort
+        String sort
     );
 
     @Modifying

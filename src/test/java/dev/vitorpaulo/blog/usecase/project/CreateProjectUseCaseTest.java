@@ -24,11 +24,11 @@ class CreateProjectUseCaseTest {
 
     @Test
     void execute_returnsSavedProject() {
-        when(projectOutput.save(project, author)).thenReturn(savedProject);
+        when(projectOutput.save(project, null, author)).thenReturn(savedProject);
 
-        var result = createProjectUseCase.execute(project, author);
+        var result = createProjectUseCase.execute(project, null, author);
 
         assertEquals(savedProject, result);
-        verify(projectOutput).save(project, author);
+        verify(projectOutput).save(project, null, author);
     }
 }
