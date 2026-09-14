@@ -48,3 +48,10 @@ management:
 clerk:
     organization-id: ${CLERK_ORGANIZATION_ID:}
     api-token: ${CLERK_API_TOKEN:}
+
+r2:
+  endpoint: ${R2_ENDPOINT:}
+  public-endpoint: ${R2_PUBLIC_ENDPOINT:}
+  access-key-id: ${R2_ACCESS_KEY_ID:}
+  secret-access-key: ${R2_SECRET_ACCESS_KEY:}
+  bucket: ${R2_BUCKET:vitorpaulo-dev}
