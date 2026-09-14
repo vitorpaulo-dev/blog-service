@@ -3,6 +3,7 @@ package dev.vitorpaulo.blog.input.mapper;
 import dev.vitorpaulo.blog.common.dto.GenericPageableRequest;
 import dev.vitorpaulo.blog.common.dto.GenericPageableResponse;
 import dev.vitorpaulo.blog.input.request.CreatePostRequest;
+import dev.vitorpaulo.blog.input.request.FeaturedPostRequest;
 import dev.vitorpaulo.blog.input.request.PostContentRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
@@ -23,6 +24,7 @@ import org.mapstruct.Mapping;
 import org.mapstruct.NullValueMappingStrategy;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 
+import java.util.List;
 import java.util.UUID;
 
 @Mapper(componentModel = "spring")
@@ -61,6 +63,8 @@ public interface PostInputMapper {
 	PostModel toModel(UpdatePostRequest request, UUID id);
 
 	PostContentModel toContentModel(PostContentRequest request);
+
+	List<FeaturedPostModel> toFeaturedModels(List<FeaturedPostRequest> requests);
 
 	PostResponse toResponse(PostModel post);
 

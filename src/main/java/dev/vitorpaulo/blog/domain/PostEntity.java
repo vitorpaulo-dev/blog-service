@@ -92,6 +92,9 @@ public class PostEntity {
     @Column(name = "help_count", nullable = false)
     private Long helpCount;
 
+    @Column(name = "weight")
+    private Integer weight;
+
     @Formula("""
         love_count
         + celebrate_count

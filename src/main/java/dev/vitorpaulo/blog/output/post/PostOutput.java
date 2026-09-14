@@ -123,6 +123,39 @@ public class PostOutput {
         postRepository.deleteByIdWithAuthor(ids, author.id(), isAdmin(author.role()));
     }
 
+    @Transactional
+    public void setFeaturedWeights(List<FeaturedPostModel> featured, AuthorModel author) {
+        if (!isAdmin(author.role())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, ExceptionCode.FORBIDDEN, null);
+        }
+
+        final var ids = featured.stream().map(FeaturedPostModel::postId).toList();
+
+        if (!ids.isEmpty()) {
+            final var posts = postRepository.findAllById(ids);
+            if (posts.size() != ids.size()) {
+                throw new NotFoundException(ExceptionCode.POST_NOT_FOUND);
+            }
+        }
+
+        postRepository.clearFeaturedWeights();
+        featured.forEach(featuredPost -> postRepository.updateWeight(featuredPost.postId(), featuredPost.weight()));
+    }
+
+    @Transactional(readOnly = true)
+    public List<PostModel> findFeatured(Language language) {
+        return postRepository.findFeatured()
+            .stream()
+            .map(post -> postOutputMapper.toModel(post, Collections.emptyList(), Collections.emptyList()))
+			.peek(post -> {
+				final var contents = post.translations();
+				if (contents.size() <= 1) return;
+
+				contents.keySet().removeIf(key -> key != language);
+			})
+			.toList();
+    }
+
     @Transactional(readOnly = true)
     public PaginatedOutput<PostModel> search(PaginatedInput<PostQueryModel> pageableInput, AuthorModel author) {
         final var language = pageableInput.query().language();
@@ -167,6 +200,7 @@ public class PostOutput {
             if (existing != null) {
                 existing.setTitle(model.title());
                 existing.setContent(model.content());
+                existing.setSummary(model.summary());
             } else {
                 var contentEntity = postOutputMapper.toContentEntity(model);
                 contentEntity.setLanguage(lang);
@@ -180,7 +214,7 @@ public class PostOutput {
 
     private PostContentModel getFirstContent(Map<Language, PostContentModel> translations) {
         if (translations == null || translations.isEmpty()) {
-            return new PostContentModel("", "");
+            return new PostContentModel("", "", "");
         }
         final var english = translations.get(Language.ENGLISH);
         if (english != null) return english;

@@ -169,4 +169,28 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
 			WHERE p.id = :postId
 	""")
 	List<UUID> findTagIds(UUID postId);
+
+    @Query("""
+        SELECT p FROM PostEntity p
+        JOIN FETCH p.contents
+        WHERE p.weight IS NOT NULL
+        ORDER BY p.weight ASC
+    """)
+    List<PostEntity> findFeatured();
+
+    @Modifying
+    @Query("""
+        UPDATE PostEntity p
+        SET p.weight = NULL
+        WHERE p.weight IS NOT NULL
+    """)
+    void clearFeaturedWeights();
+
+    @Modifying
+    @Query("""
+        UPDATE PostEntity p
+        SET p.weight = :weight
+        WHERE p.id = :postId
+    """)
+    void updateWeight(UUID postId, Integer weight);
 }

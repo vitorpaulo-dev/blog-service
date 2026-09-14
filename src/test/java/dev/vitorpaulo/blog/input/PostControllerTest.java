@@ -5,6 +5,7 @@ import dev.vitorpaulo.blog.common.dto.GenericPageableResponse;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.input.mapper.PostInputMapper;
 import dev.vitorpaulo.blog.input.request.CreatePostRequest;
+import dev.vitorpaulo.blog.input.request.FeaturedPostRequest;
 import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
@@ -36,6 +37,8 @@ class PostControllerTest {
     @Mock private GetPostByIdUseCase getPostByIdUseCase;
     @Mock private GetPostBySlugUseCase getPostBySlugUseCase;
     @Mock private SearchPostUseCase searchPostUseCase;
+    @Mock private SetPostFeaturedWeightsUseCase setPostFeaturedWeightsUseCase;
+    @Mock private GetFeaturedPostsUseCase getFeaturedPostsUseCase;
     @Mock private PostInputMapper postInputMapper;
     @Mock private PostOutput postOutput;
     @Mock private AuthorModel author;
@@ -129,5 +132,29 @@ class PostControllerTest {
         var result = postController.search(searchRequest, author);
 
         assertEquals(pageableResponse, result);
+    }
+
+    @Test
+    void setFeatured_delegatesToUseCaseWithMappedModels() {
+        var request = List.of(new FeaturedPostRequest(UUID.randomUUID(), 1));
+        var models = List.of(new FeaturedPostModel(UUID.randomUUID(), 1));
+        when(postInputMapper.toFeaturedModels(request)).thenReturn(models);
+
+        postController.setFeatured(request, author);
+
+        verify(setPostFeaturedWeightsUseCase).execute(models, author);
+    }
+
+    @Test
+    void getFeatured_returnsMappedResponses() {
+        var anotherModel = mock(PostModel.class);
+        var anotherResponse = mock(PostResponse.class);
+        when(getFeaturedPostsUseCase.execute(Language.ENGLISH)).thenReturn(List.of(postModel, anotherModel));
+        when(postInputMapper.toResponse(postModel)).thenReturn(postResponse);
+        when(postInputMapper.toResponse(anotherModel)).thenReturn(anotherResponse);
+
+        var result = postController.getFeatured(Language.ENGLISH);
+
+        assertEquals(List.of(postResponse, anotherResponse), result);
     }
 }

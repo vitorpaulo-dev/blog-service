@@ -15,5 +15,6 @@ public record UpdatePostRequest(
         @NotNull @NotEmpty Map<Language, PostContentRequest> translations,
         @Size(max = 3) List<UUID> tagIds,
         List<UUID> projectIds,
-        @NotNull PostStatus status
+        @NotNull PostStatus status,
+        Integer weight
 ) {}

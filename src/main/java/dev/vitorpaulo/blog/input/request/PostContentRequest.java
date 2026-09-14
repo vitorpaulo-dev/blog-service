@@ -5,5 +5,6 @@ import jakarta.validation.constraints.Size;
 
 public record PostContentRequest(
     @NotBlank @Size(max = 500) String title,
-    @NotBlank String content
+    @NotBlank String content,
+    @Size(max = 500) String summary
 ) {}

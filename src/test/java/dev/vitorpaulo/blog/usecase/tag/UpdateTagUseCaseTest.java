@@ -8,9 +8,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Map;
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -26,14 +23,11 @@ class UpdateTagUseCaseTest {
 
     @Test
     void execute_returnsUpdatedTag() {
-        var id = UUID.randomUUID();
-        when(tag.slug()).thenReturn("slug");
-        when(tag.translations()).thenReturn(Map.of());
-        when(tagOutput.update(any(TagModel.class))).thenReturn(updatedTag);
+        when(tagOutput.update(tag)).thenReturn(updatedTag);
 
-        var result = updateTagUseCase.execute(id, tag);
+        var result = updateTagUseCase.execute(tag);
 
         assertEquals(updatedTag, result);
-        verify(tagOutput).update(argThat(m -> m.id().equals(id)));
+        verify(tagOutput).update(tag);
     }
 }

@@ -5,5 +5,6 @@ import jakarta.validation.constraints.Size;
 
 public record ProjectContentRequest(
     @NotBlank @Size(max = 255) String title,
-    String description
+    String description,
+    @Size(max = 500) String summary
 ) {}

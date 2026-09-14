@@ -24,5 +24,6 @@ public record PostResponse(
         Long geniusCount,
         Long helpCount,
         Long reactionCount,
+        Integer weight,
         Map<Language, PostContentResponse> translations
 ) {}

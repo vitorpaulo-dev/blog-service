@@ -4,6 +4,7 @@ import dev.vitorpaulo.blog.common.dto.GenericPageableResponse;
 import dev.vitorpaulo.blog.config.security.CurrentAuthor;
 import dev.vitorpaulo.blog.input.mapper.PostInputMapper;
 import dev.vitorpaulo.blog.input.request.CreatePostRequest;
+import dev.vitorpaulo.blog.input.request.FeaturedPostRequest;
 import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
 import dev.vitorpaulo.blog.common.dto.GenericPageableRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
@@ -14,9 +15,11 @@ import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.output.post.PostOutput;
 import dev.vitorpaulo.blog.usecase.post.CreatePostUseCase;
 import dev.vitorpaulo.blog.usecase.post.DeletePostUseCase;
+import dev.vitorpaulo.blog.usecase.post.GetFeaturedPostsUseCase;
 import dev.vitorpaulo.blog.usecase.post.GetPostByIdUseCase;
 import dev.vitorpaulo.blog.usecase.post.GetPostBySlugUseCase;
 import dev.vitorpaulo.blog.usecase.post.SearchPostUseCase;
+import dev.vitorpaulo.blog.usecase.post.SetPostFeaturedWeightsUseCase;
 import dev.vitorpaulo.blog.usecase.post.UpdatePostUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +42,8 @@ public class PostController {
     private final GetPostByIdUseCase getPostByIdUseCase;
     private final GetPostBySlugUseCase getPostBySlugUseCase;
     private final SearchPostUseCase searchPostUseCase;
+    private final SetPostFeaturedWeightsUseCase setPostFeaturedWeightsUseCase;
+    private final GetFeaturedPostsUseCase getFeaturedPostsUseCase;
 
     private final PostInputMapper postInputMapper;
     private final PostOutput postOutput;
@@ -70,6 +75,19 @@ public class PostController {
     @GetMapping("/slug/{slug}/{language}")
     public PostResponse getBySlug(@PathVariable String slug, @PathVariable Language language) {
         return postInputMapper.toResponse(getPostBySlugUseCase.execute(slug, language));
+    }
+
+    @PostMapping("/featured")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setFeatured(@RequestBody List<FeaturedPostRequest> request, @CurrentAuthor AuthorModel author) {
+        setPostFeaturedWeightsUseCase.execute(postInputMapper.toFeaturedModels(request), author);
+    }
+
+    @GetMapping("/featured/{language}")
+    public List<PostResponse> getFeatured(@PathVariable Language language) {
+        return getFeaturedPostsUseCase.execute(language).stream()
+                .map(postInputMapper::toResponse)
+                .toList();
     }
 
     @PostMapping("/search")

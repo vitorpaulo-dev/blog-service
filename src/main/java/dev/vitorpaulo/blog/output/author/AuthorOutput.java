@@ -56,7 +56,7 @@ public class AuthorOutput {
             .findFirst()
             .orElseThrow(InternalException::new);
 
-        return authorOutputMapper.toModel(author, organization.roleName().orElseThrow(InternalException::new));
+        return authorOutputMapper.toModel(author, organization.role());
     }
 
     private String generateUniqueSlug(String name, java.util.UUID currentId) {
