@@ -50,7 +50,7 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.POST, "/v1/tag/search").permitAll()
 				.requestMatchers(HttpMethod.POST, "/v1/tag/batch").permitAll()
 				.requestMatchers("/v1/tag/**").authenticated()
-				.requestMatchers(HttpMethod.POST, "/v1/upload").authenticated()
+				.requestMatchers(HttpMethod.POST, "/v1/upload/presign").authenticated()
 				.anyRequest().permitAll()
 			)
 			.oauth2ResourceServer(oauth2 -> oauth2
