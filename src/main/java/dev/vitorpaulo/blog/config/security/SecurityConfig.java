@@ -38,6 +38,7 @@ public class SecurityConfig {
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 				.requestMatchers(HttpMethod.GET, "/actuator/**").permitAll()
+				.requestMatchers(HttpMethod.GET, "/v1/post/featured/**").permitAll()
 				.requestMatchers(HttpMethod.GET, "/v1/post/slug/**").permitAll()
 				.requestMatchers(HttpMethod.POST, "/v1/post/search").permitAll()
 				.requestMatchers(HttpMethod.POST, "/v1/post/batch").permitAll()

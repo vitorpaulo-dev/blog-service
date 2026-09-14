@@ -48,15 +48,35 @@ class RequestValidationTest {
     }
 
     @Test
+    void contentRequests_summaryOverFiveHundred_invalid() {
+        var summary = "s".repeat(501);
+        var postViolations = validator.validate(new PostContentRequest("Title", "Content", summary));
+        var projectViolations = validator.validate(new ProjectContentRequest("Title", "Description", summary));
+
+        assertFalse(postViolations.isEmpty());
+        assertFalse(projectViolations.isEmpty());
+    }
+
+    @Test
+    void contentRequests_summaryAtFiveHundred_valid() {
+        var summary = "s".repeat(500);
+        var postViolations = validator.validate(new PostContentRequest("Title", "Content", summary));
+        var projectViolations = validator.validate(new ProjectContentRequest("Title", "Description", summary));
+
+        assertTrue(postViolations.isEmpty());
+        assertTrue(projectViolations.isEmpty());
+    }
+
+    @Test
     void postAndProjectRequests_tagIdsOverThree_invalid() {
         var createPost = validator.validate(new CreatePostRequest(
-                null, Map.of(Language.ENGLISH, new PostContentRequest("Title", "Content")), ids(4), null, null));
+                null, Map.of(Language.ENGLISH, new PostContentRequest("Title", "Content", "Summary")), ids(4), null, null));
         var updatePost = validator.validate(new UpdatePostRequest(
-                null, Map.of(Language.ENGLISH, new PostContentRequest("Title", "Content")), ids(4), null, PostStatus.DRAFT));
+                null, Map.of(Language.ENGLISH, new PostContentRequest("Title", "Content", "Summary")), ids(4), null, PostStatus.DRAFT, null));
         var createProject = validator.validate(new CreateProjectRequest(
-                null, null, null, null, ids(4), Map.of(Language.ENGLISH, new ProjectContentRequest("Title", "Description")), null));
+                null, null, null, null, ids(4), Map.of(Language.ENGLISH, new ProjectContentRequest("Title", "Description", "Summary")), null));
         var updateProject = validator.validate(new UpdateProjectRequest(
-                null, null, null, null, ids(4), Map.of(Language.ENGLISH, new ProjectContentRequest("Title", "Description")), ProjectStatus.DRAFT));
+                null, null, null, null, ids(4), Map.of(Language.ENGLISH, new ProjectContentRequest("Title", "Description", "Summary")), ProjectStatus.DRAFT));
 
         assertFalse(createPost.isEmpty());
         assertFalse(updatePost.isEmpty());
@@ -67,13 +87,13 @@ class RequestValidationTest {
     @Test
     void postAndProjectRequests_tagIdsAtThree_valid() {
         var createPost = validator.validate(new CreatePostRequest(
-                null, Map.of(Language.ENGLISH, new PostContentRequest("Title", "Content")), ids(3), null, null));
+                null, Map.of(Language.ENGLISH, new PostContentRequest("Title", "Content", "Summary")), ids(3), null, null));
         var updatePost = validator.validate(new UpdatePostRequest(
-                null, Map.of(Language.ENGLISH, new PostContentRequest("Title", "Content")), ids(3), null, PostStatus.DRAFT));
+                null, Map.of(Language.ENGLISH, new PostContentRequest("Title", "Content", "Summary")), ids(3), null, PostStatus.DRAFT, null));
         var createProject = validator.validate(new CreateProjectRequest(
-                null, null, null, null, ids(3), Map.of(Language.ENGLISH, new ProjectContentRequest("Title", "Description")), null));
+                null, null, null, null, ids(3), Map.of(Language.ENGLISH, new ProjectContentRequest("Title", "Description", "Summary")), null));
         var updateProject = validator.validate(new UpdateProjectRequest(
-                null, null, null, null, ids(3), Map.of(Language.ENGLISH, new ProjectContentRequest("Title", "Description")), ProjectStatus.DRAFT));
+                null, null, null, null, ids(3), Map.of(Language.ENGLISH, new ProjectContentRequest("Title", "Description", "Summary")), ProjectStatus.DRAFT));
 
         assertTrue(createPost.isEmpty());
         assertTrue(updatePost.isEmpty());

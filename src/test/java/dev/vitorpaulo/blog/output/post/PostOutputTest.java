@@ -404,6 +404,69 @@ class PostOutputTest {
         assertTrue(transactional.readOnly());
     }
 
+    @Test
+    void setFeaturedWeights_admin_clearsAndSetsWeights() {
+        var firstId = UUID.randomUUID();
+        var secondId = UUID.randomUUID();
+        when(postRepository.findAllById(List.of(firstId, secondId))).thenReturn(List.of(postEntity, secondPostEntity));
+
+        postOutput.setFeaturedWeights(
+            List.of(new FeaturedPostModel(firstId, 1), new FeaturedPostModel(secondId, 2)),
+            author
+        );
+
+        verify(postRepository).clearFeaturedWeights();
+        verify(postRepository).updateWeight(firstId, 1);
+        verify(postRepository).updateWeight(secondId, 2);
+    }
+
+    @Test
+    void setFeaturedWeights_emptyList_clearsAllWithoutUpdates() {
+        postOutput.setFeaturedWeights(List.of(), author);
+
+        verify(postRepository).clearFeaturedWeights();
+        verify(postRepository, never()).updateWeight(any(), any());
+    }
+
+    @Test
+    void setFeaturedWeights_nonAdmin_throwsForbidden() {
+        when(author.role()).thenReturn("org:member");
+
+        var ex = assertThrows(BusinessException.class,
+                () -> postOutput.setFeaturedWeights(List.of(new FeaturedPostModel(UUID.randomUUID(), 1)), author));
+        assertEquals(ExceptionCode.FORBIDDEN, ex.getCode());
+        verify(postRepository, never()).clearFeaturedWeights();
+    }
+
+    @Test
+    void setFeaturedWeights_missingPost_throwsNotFoundException() {
+        var featureId = UUID.randomUUID();
+        when(postRepository.findAllById(List.of(featureId))).thenReturn(List.of());
+
+        var ex = assertThrows(NotFoundException.class,
+                () -> postOutput.setFeaturedWeights(List.of(new FeaturedPostModel(featureId, 1)), author));
+        assertEquals(ExceptionCode.POST_NOT_FOUND, ex.getCode());
+        verify(postRepository, never()).clearFeaturedWeights();
+    }
+
+    @Test
+    void findFeatured_preservesRepositoryOrderAndFiltersToLanguage() {
+        var translations = new HashMap<Language, PostContentModel>();
+        translations.put(Language.ENGLISH, null);
+        translations.put(Language.PORTUGUESE, null);
+        when(postRepository.findFeatured()).thenReturn(List.of(postEntity, secondPostEntity));
+        when(postOutputMapper.toModel(postEntity, List.of(), List.of())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(secondPostEntity, List.of(), List.of())).thenReturn(secondResult);
+        when(expectedResult.translations()).thenReturn(translations);
+        when(secondResult.translations()).thenReturn(Map.of());
+
+        var result = postOutput.findFeatured(Language.ENGLISH);
+
+        assertEquals(List.of(expectedResult, secondResult), result);
+        assertTrue(translations.containsKey(Language.ENGLISH));
+        assertFalse(translations.containsKey(Language.PORTUGUESE));
+    }
+
     private PaginatedInput<PostQueryModel> input(PostQueryModel query, String sort, Sort.Direction direction) {
         return new PaginatedInput<>(query, 0, 10, sort, direction);
     }

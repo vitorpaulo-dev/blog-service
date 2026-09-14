@@ -146,6 +146,7 @@ public class ProjectOutput {
 			if (existing != null) {
 				existing.setTitle(model.title());
 				existing.setDescription(model.description());
+				existing.setSummary(model.summary());
 			} else {
 				final var content = projectOutputMapper.toContentEntity(model);
 				content.setLanguage(lang);
@@ -159,7 +160,7 @@ public class ProjectOutput {
 
 	private ProjectContentModel getFirstContent(Map<Language, ProjectContentModel> translations) {
 		if (translations == null || translations.isEmpty()) {
-			return new ProjectContentModel("", "");
+			return new ProjectContentModel("", "", "");
 		}
 
 		final var english = translations.get(Language.ENGLISH);

@@ -71,13 +71,13 @@ class TagControllerTest {
     void update_validRequest_returnsUpdatedResponse() {
         var id = UUID.randomUUID();
         when(tagInputMapper.toModel(updateRequest, id)).thenReturn(tagModel);
-        when(updateTagUseCase.execute(id, tagModel)).thenReturn(tagModel);
+        when(updateTagUseCase.execute(tagModel)).thenReturn(tagModel);
         when(tagInputMapper.toResponse(tagModel)).thenReturn(tagResponse);
 
         var result = tagController.update(id, updateRequest, author);
 
         assertEquals(tagResponse, result);
-        verify(updateTagUseCase).execute(id, tagModel);
+        verify(updateTagUseCase).execute(tagModel);
     }
 
     @Test
