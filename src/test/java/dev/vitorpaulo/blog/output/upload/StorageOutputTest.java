@@ -81,8 +81,11 @@ class StorageOutputTest {
 	void missingPresigner_throwsUploadFailed() throws Exception {
 		final var output = output(Optional.empty(), Optional.empty());
 
-		assertThrows(BusinessException.class, () -> output.presignUpload("post", "banner", "a.png"));
-		assertThrows(BusinessException.class, () -> output.signKeys(List.of("post/banner/a.png")));
+		final var uploadException = assertThrows(BusinessException.class, () -> output.presignUpload("post", "banner", "a.png"));
+		final var signException = assertThrows(BusinessException.class, () -> output.signKeys(List.of("post/banner/a.png")));
+
+		assertEquals(ExceptionCode.UPLOAD_FAILED, uploadException.getCode());
+		assertEquals(ExceptionCode.UPLOAD_FAILED, signException.getCode());
 	}
 
 	@Test
@@ -93,7 +96,9 @@ class StorageOutputTest {
 
 		final var output = output(Optional.of(presigner), Optional.empty());
 
-		assertThrows(BusinessException.class, () -> output.presignUpload("post", "banner", "a.png"));
+		final var uploadException = assertThrows(BusinessException.class, () -> output.presignUpload("post", "banner", "a.png"));
+
+		assertEquals(ExceptionCode.UPLOAD_FAILED, uploadException.getCode());
 		assertEquals(1, output.signKeys(List.of("post/banner/a.png")).size());
 	}
 
