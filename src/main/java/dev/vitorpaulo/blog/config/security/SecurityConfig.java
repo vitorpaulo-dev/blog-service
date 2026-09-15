@@ -104,6 +104,7 @@ public class SecurityConfig {
 		config.addAllowedOriginPattern("http://localhost:*");
 		config.addAllowedOriginPattern("http://127.0.0.1:*");
 		config.addAllowedOriginPattern("http://192.168.*.*:*");
+		config.addAllowedOriginPattern("http://100.72.94.66:4200");
 		config.addAllowedOriginPattern("https://vitorpaulo.dev");
 		config.addAllowedMethod("*");
 		config.addAllowedHeader("*");

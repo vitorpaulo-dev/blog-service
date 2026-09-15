@@ -50,7 +50,7 @@ clerk:
     api-token: ${CLERK_API_TOKEN:}
 
 turnstile:
-    secret-key: ${TURNSTILE_SECRET_KEY:}
+    secret: ${TURNSTILE_SECRET_KEY:}
 
 r2:
   endpoint: ${R2_ENDPOINT:}
