@@ -1,23 +1,18 @@
 package dev.vitorpaulo.blog.config.captcha;
 
 import feign.FeignException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class TurnstileClient {
 
     private final TurnstileFeignClient turnstileFeignClient;
 
-    private final String secretKey;
-
-    public TurnstileClient(
-            final TurnstileFeignClient turnstileFeignClient,
-            @Value("${turnstile.secret-key}") final String secretKey
-    ) {
-        this.turnstileFeignClient = turnstileFeignClient;
-        this.secretKey = secretKey;
-    }
+    @Value("${turnstile.secret-key}")
+    private String secretKey;
 
     public boolean verify(String token) {
         try {

@@ -1,11 +1,13 @@
 package dev.vitorpaulo.blog.config.captcha;
 
 import feign.FeignException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,9 +27,16 @@ class TurnstileClientTest {
 
 	@Mock private FeignException networkError;
 
+	private TurnstileClient client;
+
+	@BeforeEach
+	void setUp() {
+		client = new TurnstileClient(feignClient);
+		ReflectionTestUtils.setField(client, "secretKey", SECRET_KEY);
+	}
+
 	@Test
 	void verify_sendsSecretAndToken_returnsTrue() {
-		final TurnstileClient client = new TurnstileClient(feignClient, SECRET_KEY);
 		when(feignClient.verifySite(any())).thenReturn(new TurnstileFeignClient.TurnstileVerificationResponse(true));
 
 		assertTrue(client.verify("token"));
@@ -42,7 +51,6 @@ class TurnstileClientTest {
 
 	@Test
 	void verify_successResponse_returnsTrue() {
-		final TurnstileClient client = new TurnstileClient(feignClient, SECRET_KEY);
 		when(feignClient.verifySite(any())).thenReturn(new TurnstileFeignClient.TurnstileVerificationResponse(true));
 
 		assertTrue(client.verify("token"));
@@ -50,7 +58,6 @@ class TurnstileClientTest {
 
 	@Test
 	void verify_failedResponse_returnsFalse() {
-		final TurnstileClient client = new TurnstileClient(feignClient, SECRET_KEY);
 		when(feignClient.verifySite(any())).thenReturn(new TurnstileFeignClient.TurnstileVerificationResponse(false));
 
 		assertFalse(client.verify("token"));
@@ -58,7 +65,6 @@ class TurnstileClientTest {
 
 	@Test
 	void verify_nullResponse_returnsFalse() {
-		final TurnstileClient client = new TurnstileClient(feignClient, SECRET_KEY);
 		when(feignClient.verifySite(any())).thenReturn(null);
 
 		assertFalse(client.verify("token"));
@@ -66,7 +72,6 @@ class TurnstileClientTest {
 
 	@Test
 	void verify_serverError_returnsFalse() {
-		final TurnstileClient client = new TurnstileClient(feignClient, SECRET_KEY);
 		when(feignClient.verifySite(any())).thenThrow(serverError);
 
 		assertFalse(client.verify("token"));
@@ -74,7 +79,6 @@ class TurnstileClientTest {
 
 	@Test
 	void verify_networkError_returnsFalse() {
-		final TurnstileClient client = new TurnstileClient(feignClient, SECRET_KEY);
 		when(feignClient.verifySite(any())).thenThrow(networkError);
 
 		assertFalse(client.verify("token"));
