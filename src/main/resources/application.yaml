@@ -49,6 +49,9 @@ clerk:
     organization-id: ${CLERK_ORGANIZATION_ID:}
     api-token: ${CLERK_API_TOKEN:}
 
+turnstile:
+    secret-key: ${TURNSTILE_SECRET_KEY:}
+
 r2:
   endpoint: ${R2_ENDPOINT:}
   public-endpoint: ${R2_PUBLIC_ENDPOINT:}
