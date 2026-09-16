@@ -135,6 +135,32 @@ class SubscriberOutputTest {
     }
 
     @Test
+    void search_emailAndEnumFilters_passedToRepository() {
+        var query = new SubscriberQueryModel("reader@example.com", dev.vitorpaulo.blog.model.SubscriberStatus.ACTIVE, dev.vitorpaulo.blog.model.Language.ENGLISH, dev.vitorpaulo.blog.model.Frequency.EVERY_POST);
+        var input = new PaginatedInput<SubscriberQueryModel>(query, 0, 10, null, org.springframework.data.domain.Sort.Direction.DESC);
+        org.springframework.data.domain.Page<SubscriberEntity> page = new PageImpl<>(List.of(subscriberEntity));
+        when(subscriberRepository.search(
+            org.mockito.ArgumentMatchers.eq("reader@example.com"),
+            org.mockito.ArgumentMatchers.eq(dev.vitorpaulo.blog.model.SubscriberStatus.ACTIVE),
+            org.mockito.ArgumentMatchers.eq(dev.vitorpaulo.blog.model.Language.ENGLISH),
+            org.mockito.ArgumentMatchers.eq(dev.vitorpaulo.blog.model.Frequency.EVERY_POST),
+            org.mockito.ArgumentMatchers.any(PageRequest.class)
+        )).thenReturn(page);
+        when(subscriberOutputMapper.toModel(subscriberEntity)).thenReturn(subscriberModel);
+
+        var result = subscriberOutput.search(input);
+
+        org.mockito.Mockito.verify(subscriberRepository).search(
+            org.mockito.ArgumentMatchers.eq("reader@example.com"),
+            org.mockito.ArgumentMatchers.eq(dev.vitorpaulo.blog.model.SubscriberStatus.ACTIVE),
+            org.mockito.ArgumentMatchers.eq(dev.vitorpaulo.blog.model.Language.ENGLISH),
+            org.mockito.ArgumentMatchers.eq(dev.vitorpaulo.blog.model.Frequency.EVERY_POST),
+            org.mockito.ArgumentMatchers.any(PageRequest.class)
+        );
+        assertEquals(List.of(subscriberModel), result.content());
+    }
+
+    @Test
     void search_unknownSortPropertyDefaultsToCreatedAt() {
         var query = new SubscriberQueryModel(null, null, null, null);
         var input = new PaginatedInput<SubscriberQueryModel>(query, 0, 10, null, org.springframework.data.domain.Sort.Direction.DESC);

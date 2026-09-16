@@ -20,10 +20,10 @@ public interface SubscriberRepository extends JpaRepository<SubscriberEntity, UU
     @Query("""
         SELECT s
         FROM SubscriberEntity s
-        WHERE (:email IS NULL OR LOWER(s.email) LIKE LOWER(CONCAT('%', :email, '%')))
-          AND (:status IS NULL OR s.status = :status)
-          AND (:language IS NULL OR s.language = :language)
-          AND (:frequency IS NULL OR s.frequency = :frequency)
+        WHERE (cast(:email as string) IS NULL OR LOWER(s.email) LIKE LOWER(CONCAT('%', cast(:email as string), '%')))
+          AND (cast(:status as string) IS NULL OR s.status = cast(:status as string))
+          AND (cast(:language as string) IS NULL OR s.language = cast(:language as string))
+          AND (cast(:frequency as string) IS NULL OR s.frequency = cast(:frequency as string))
     """)
     Page<SubscriberEntity> search(
         @Param("email") String email,
