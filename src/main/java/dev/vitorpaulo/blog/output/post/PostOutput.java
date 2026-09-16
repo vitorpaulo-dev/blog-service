@@ -13,11 +13,11 @@ import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
+import dev.vitorpaulo.blog.repository.RedisRepository;
 import dev.vitorpaulo.blog.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +37,7 @@ public class PostOutput {
 	private final ProjectRepository projectRepository;
 	private final TagRepository tagRepository;
 	private final AuthorRepository authorRepository;
-	private final StringRedisTemplate stringRedisTemplate;
+	private final RedisRepository redisRepository;
 
 	private static final String KEY_PREFIX = "post:";
 	private static final Duration VIEW_TTL = Duration.ofHours(48);
@@ -60,13 +60,13 @@ public class PostOutput {
                 .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
 
         final var key = KEY_PREFIX + entity.getId() + ":reaction:" + ip + ":" + reactionType;
-        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+        if (redisRepository.keyExists(key)) {
             return postOutputMapper.toReactionModel(entity);
         }
 
         increment(entity, reactionType);
         final var saved = postRepository.save(entity);
-        stringRedisTemplate.opsForValue().set(key, "reacted", REACTION_TTL);
+        redisRepository.set(key, REACTION_TTL);
 
         return postOutputMapper.toReactionModel(saved);
     }
@@ -90,10 +90,10 @@ public class PostOutput {
                 .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_SLUG_NOT_FOUND));
 
         final var viewKey = KEY_PREFIX + entity.getId() + ":view:" + ip;
-        if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(viewKey))) {
+        if (!redisRepository.keyExists(viewKey)) {
             entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
             postRepository.save(entity);
-            stringRedisTemplate.opsForValue().set(viewKey, "viewed", VIEW_TTL);
+            redisRepository.set(viewKey, VIEW_TTL);
         }
 
 		return postOutputMapper.toModel(

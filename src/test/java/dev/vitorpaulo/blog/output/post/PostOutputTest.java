@@ -11,6 +11,7 @@ import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
+import dev.vitorpaulo.blog.repository.RedisRepository;
 import dev.vitorpaulo.blog.repository.TagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,8 +24,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -46,8 +45,7 @@ class PostOutputTest {
     @Mock private ProjectRepository projectRepository;
     @Mock private TagRepository tagRepository;
     @Mock private AuthorRepository authorRepository;
-    @Mock private StringRedisTemplate stringRedisTemplate;
-    @Mock private ValueOperations<String, String> valueOperations;
+    @Mock private RedisRepository redisRepository;
     @Mock private PostModel post;
     @Mock private PostModel expectedResult;
     @Mock private PostModel secondResult;
@@ -94,8 +92,7 @@ class PostOutputTest {
         var postId = UUID.randomUUID();
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getId()).thenReturn(postId);
-        when(stringRedisTemplate.hasKey(eq("post:" + postId + ":view:1.2.3.4"))).thenReturn(false);
-        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisRepository.keyExists(eq("post:" + postId + ":view:1.2.3.4"))).thenReturn(false);
         when(postEntity.getViewCount()).thenReturn(5L);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
 
@@ -103,8 +100,7 @@ class PostOutputTest {
 
         verify(postEntity).setViewCount(6L);
         verify(postOutputMapper).toModel(eq(postEntity), anyList(), anyList());
-        verify(stringRedisTemplate).opsForValue();
-        verify(valueOperations).set(eq("post:" + postId + ":view:1.2.3.4"), eq("viewed"), eq(Duration.ofHours(48)));
+        verify(redisRepository).set(eq("post:" + postId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
     }
 
     @Test
@@ -112,15 +108,14 @@ class PostOutputTest {
         var postId = UUID.randomUUID();
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getId()).thenReturn(postId);
-        when(stringRedisTemplate.hasKey(eq("post:" + postId + ":view:1.2.3.4"))).thenReturn(false);
+        when(redisRepository.keyExists(eq("post:" + postId + ":view:1.2.3.4"))).thenReturn(false);
         when(postEntity.getViewCount()).thenReturn(null);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
-        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
 
         postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "1.2.3.4");
 
         verify(postEntity).setViewCount(1L);
-        verify(valueOperations).set(eq("post:" + postId + ":view:1.2.3.4"), eq("viewed"), eq(Duration.ofHours(48)));
+        verify(redisRepository).set(eq("post:" + postId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
     }
 
     @Test
@@ -128,13 +123,13 @@ class PostOutputTest {
         var postId = UUID.randomUUID();
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
         when(postEntity.getId()).thenReturn(postId);
-        when(stringRedisTemplate.hasKey("post:" + postId + ":view:1.2.3.4")).thenReturn(true);
+        when(redisRepository.keyExists("post:" + postId + ":view:1.2.3.4")).thenReturn(true);
 
         postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "1.2.3.4");
 
         verify(postEntity, never()).setViewCount(anyLong());
         verify(postRepository, never()).save(any());
-        verify(stringRedisTemplate, never()).opsForValue();
+        verify(redisRepository, never()).set(anyString(), any());
     }
 
     @Test
@@ -153,8 +148,7 @@ class PostOutputTest {
         stubReactionCount(reactionType, 1L);
         when(postRepository.findBySlug("my-post")).thenReturn(Optional.of(postEntity));
         when(postEntity.getId()).thenReturn(postId);
-        when(stringRedisTemplate.hasKey(anyString())).thenReturn(false);
-        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisRepository.keyExists(anyString())).thenReturn(false);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
         when(postOutputMapper.toReactionModel(postEntity)).thenReturn(new ReactionModel(1L, 1L, 1L, 1L, 4L));
 
@@ -162,7 +156,7 @@ class PostOutputTest {
 
         assertEquals(4L, result.reactionCount());
         assertReactionIncremented(reactionType, postEntity);
-        verify(valueOperations).set("post:" + postId + ":reaction:203.0.113.7:" + reactionType, "reacted", Duration.ofSeconds(604800));
+        verify(redisRepository).set("post:" + postId + ":reaction:203.0.113.7:" + reactionType, Duration.ofSeconds(604800));
     }
 
     @ParameterizedTest
@@ -172,14 +166,14 @@ class PostOutputTest {
         var expected = new ReactionModel(1L, 2L, 3L, 4L, 10L);
         when(postRepository.findBySlug("my-post")).thenReturn(Optional.of(postEntity));
         when(postEntity.getId()).thenReturn(postId);
-        when(stringRedisTemplate.hasKey("post:" + postId + ":reaction:203.0.113.7:" + reactionType)).thenReturn(true);
+        when(redisRepository.keyExists("post:" + postId + ":reaction:203.0.113.7:" + reactionType)).thenReturn(true);
         when(postOutputMapper.toReactionModel(postEntity)).thenReturn(expected);
 
         var result = postOutput.react("my-post", reactionType, "203.0.113.7");
 
         assertEquals(expected, result);
         verify(postRepository, never()).save(any());
-        verify(stringRedisTemplate, never()).opsForValue();
+        verify(redisRepository, never()).set(anyString(), any());
     }
 
     @Test
@@ -189,7 +183,7 @@ class PostOutputTest {
         var ex = assertThrows(NotFoundException.class,
                 () -> postOutput.react("nonexistent", ReactionType.LOVE, "203.0.113.7"));
         assertEquals(ExceptionCode.POST_NOT_FOUND, ex.getCode());
-        verifyNoInteractions(stringRedisTemplate);
+        verifyNoInteractions(redisRepository);
     }
 
     private void stubReactionCount(ReactionType reactionType, long current) {

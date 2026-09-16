@@ -11,11 +11,11 @@ import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
+import dev.vitorpaulo.blog.repository.RedisRepository;
 import dev.vitorpaulo.blog.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +33,7 @@ public class ProjectOutput {
 	private final ProjectOutputMapper projectOutputMapper;
 	private final AuthorRepository authorRepository;
 	private final TagRepository tagRepository;
-	private final StringRedisTemplate stringRedisTemplate;
+	private final RedisRepository redisRepository;
 
 	private static final Duration REACTION_TTL = Duration.ofSeconds(604800);
 
@@ -50,10 +50,10 @@ public class ProjectOutput {
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_SLUG_NOT_FOUND));
 
 		final var viewKey = "project:" + entity.getId() + ":view:" + ip;
-		if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(viewKey))) {
+		if (!redisRepository.keyExists(viewKey)) {
 			entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
 			projectRepository.save(entity);
-			stringRedisTemplate.opsForValue().set(viewKey, "viewed", Duration.ofHours(48));
+			redisRepository.set(viewKey, Duration.ofHours(48));
 		}
 
 		return projectOutputMapper.toModel(entity, Collections.emptyList());
@@ -65,13 +65,13 @@ public class ProjectOutput {
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
 
 		final var key = "project:" + entity.getId() + ":reaction:" + ip + ":" + reactionType;
-		if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+		if (redisRepository.keyExists(key)) {
 			return projectOutputMapper.toReactionModel(entity);
 		}
 
 		increment(entity, reactionType);
 		final var saved = projectRepository.save(entity);
-		stringRedisTemplate.opsForValue().set(key, "reacted", REACTION_TTL);
+		redisRepository.set(key, REACTION_TTL);
 
 		return projectOutputMapper.toReactionModel(saved);
 	}
