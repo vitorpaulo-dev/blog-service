@@ -14,7 +14,7 @@ public class TurnstileClient {
 
 	private final RestClient restClient;
 
-	@Value("${turnstile.secret}")
+	@Value("${turnstile.secret-key}")
 	private String secret;
 
 	public boolean verify(String token) {

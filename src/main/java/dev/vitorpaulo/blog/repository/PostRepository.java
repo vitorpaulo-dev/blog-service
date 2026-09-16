@@ -28,6 +28,8 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
     """)
     Optional<PostEntity> findBySlugAndLanguage(String slug, Language language);
 
+    Optional<PostEntity> findBySlug(String slug);
+
     long countBySlugAndIdNot(String slug, UUID id);
 
 	@Query(

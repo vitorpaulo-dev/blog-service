@@ -11,10 +11,13 @@ import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
+import dev.vitorpaulo.blog.repository.RedisRepository;
 import dev.vitorpaulo.blog.repository.TagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,6 +26,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +45,7 @@ class PostOutputTest {
     @Mock private ProjectRepository projectRepository;
     @Mock private TagRepository tagRepository;
     @Mock private AuthorRepository authorRepository;
+    @Mock private RedisRepository redisRepository;
     @Mock private PostModel post;
     @Mock private PostModel expectedResult;
     @Mock private PostModel secondResult;
@@ -84,25 +89,47 @@ class PostOutputTest {
 
     @Test
     void findBySlugAndIncrementView_found_incrementsViewCount() {
+        var postId = UUID.randomUUID();
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
+        when(postEntity.getId()).thenReturn(postId);
+        when(redisRepository.keyExists(eq("post:" + postId + ":view:1.2.3.4"))).thenReturn(false);
         when(postEntity.getViewCount()).thenReturn(5L);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
 
-        postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
+        postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "1.2.3.4");
 
         verify(postEntity).setViewCount(6L);
         verify(postOutputMapper).toModel(eq(postEntity), anyList(), anyList());
+        verify(redisRepository).set(eq("post:" + postId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
     }
 
     @Test
     void findBySlugAndIncrementView_nullViewCount_setsToOne() {
+        var postId = UUID.randomUUID();
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
+        when(postEntity.getId()).thenReturn(postId);
+        when(redisRepository.keyExists(eq("post:" + postId + ":view:1.2.3.4"))).thenReturn(false);
         when(postEntity.getViewCount()).thenReturn(null);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
 
-        postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH);
+        postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "1.2.3.4");
 
         verify(postEntity).setViewCount(1L);
+        verify(redisRepository).set(eq("post:" + postId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
+    }
+
+    @Test
+    void findBySlugAndIncrementView_keyAlreadyExists_doesNotIncrement() {
+        var postId = UUID.randomUUID();
+        when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
+        when(postEntity.getId()).thenReturn(postId);
+        when(redisRepository.keyExists("post:" + postId + ":view:1.2.3.4")).thenReturn(true);
+
+        postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "1.2.3.4");
+
+        verify(postEntity, never()).setViewCount(anyLong());
+        verify(postRepository, never()).save(any());
+        verify(redisRepository, never()).set(anyString(), any());
     }
 
     @Test
@@ -110,8 +137,71 @@ class PostOutputTest {
         when(postRepository.findBySlugAndLanguage(anyString(), any())).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class,
-                () -> postOutput.findBySlugAndIncrementView("nonexistent", Language.ENGLISH));
+                () -> postOutput.findBySlugAndIncrementView("nonexistent", Language.ENGLISH, "1.2.3.4"));
         assertEquals(ExceptionCode.POST_SLUG_NOT_FOUND, ex.getCode());
+    }
+
+    @ParameterizedTest
+    @EnumSource(ReactionType.class)
+    void react_keyAbsent_incrementsCountSavesAndSetsKey(ReactionType reactionType) {
+        var postId = UUID.randomUUID();
+        stubReactionCount(reactionType, 1L);
+        when(postRepository.findBySlug("my-post")).thenReturn(Optional.of(postEntity));
+        when(postEntity.getId()).thenReturn(postId);
+        when(redisRepository.keyExists(anyString())).thenReturn(false);
+        when(postRepository.save(postEntity)).thenReturn(postEntity);
+        when(postOutputMapper.toReactionModel(postEntity)).thenReturn(new ReactionModel(1L, 1L, 1L, 1L, 4L));
+
+        var result = postOutput.react("my-post", reactionType, "203.0.113.7");
+
+        assertEquals(4L, result.reactionCount());
+        assertReactionIncremented(reactionType, postEntity);
+        verify(redisRepository).set("post:" + postId + ":reaction:203.0.113.7:" + reactionType, Duration.ofSeconds(604800));
+    }
+
+    @ParameterizedTest
+    @EnumSource(ReactionType.class)
+    void react_keyAlreadyPresent_returnsCountsUnchanged(ReactionType reactionType) {
+        var postId = UUID.randomUUID();
+        var expected = new ReactionModel(1L, 2L, 3L, 4L, 10L);
+        when(postRepository.findBySlug("my-post")).thenReturn(Optional.of(postEntity));
+        when(postEntity.getId()).thenReturn(postId);
+        when(redisRepository.keyExists("post:" + postId + ":reaction:203.0.113.7:" + reactionType)).thenReturn(true);
+        when(postOutputMapper.toReactionModel(postEntity)).thenReturn(expected);
+
+        var result = postOutput.react("my-post", reactionType, "203.0.113.7");
+
+        assertEquals(expected, result);
+        verify(postRepository, never()).save(any());
+        verify(redisRepository, never()).set(anyString(), any());
+    }
+
+    @Test
+    void react_unknownSlug_throwsNotFoundException() {
+        when(postRepository.findBySlug("nonexistent")).thenReturn(Optional.empty());
+
+        var ex = assertThrows(NotFoundException.class,
+                () -> postOutput.react("nonexistent", ReactionType.LOVE, "203.0.113.7"));
+        assertEquals(ExceptionCode.POST_NOT_FOUND, ex.getCode());
+        verifyNoInteractions(redisRepository);
+    }
+
+    private void stubReactionCount(ReactionType reactionType, long current) {
+        switch (reactionType) {
+            case LOVE -> when(postEntity.getLoveCount()).thenReturn(current);
+            case CELEBRATE -> when(postEntity.getCelebrateCount()).thenReturn(current);
+            case GENIUS -> when(postEntity.getGeniusCount()).thenReturn(current);
+            case HELP -> when(postEntity.getHelpCount()).thenReturn(current);
+        }
+    }
+
+    private void assertReactionIncremented(ReactionType reactionType, PostEntity entity) {
+        switch (reactionType) {
+            case LOVE -> verify(entity).setLoveCount(2L);
+            case CELEBRATE -> verify(entity).setCelebrateCount(2L);
+            case GENIUS -> verify(entity).setGeniusCount(2L);
+            case HELP -> verify(entity).setHelpCount(2L);
+        }
     }
 
     @Test

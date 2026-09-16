@@ -4,12 +4,15 @@ import dev.vitorpaulo.blog.common.dto.GenericPageableRequest;
 import dev.vitorpaulo.blog.common.dto.GenericPageableResponse;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.input.mapper.PostInputMapper;
+import dev.vitorpaulo.blog.input.mapper.ReactionInputMapper;
 import dev.vitorpaulo.blog.input.request.CreatePostRequest;
 import dev.vitorpaulo.blog.input.request.FeaturedPostRequest;
 import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
+import dev.vitorpaulo.blog.input.request.ReactToRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
 import dev.vitorpaulo.blog.input.response.PostResponse;
+import dev.vitorpaulo.blog.input.response.ReactionResponse;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -51,6 +55,11 @@ class PostControllerTest {
     @Mock private PaginatedInput<PostQueryModel> paginatedInput;
     @Mock private PaginatedOutput<PostModel> paginatedOutput;
     @Mock private GenericPageableResponse<PostResponse> pageableResponse;
+    @Mock private ReactionInputMapper reactionInputMapper;
+    @Mock private ReactToPostUseCase reactToPostUseCase;
+    @Mock private ReactToRequest reactToRequest;
+    @Mock private ReactionModel reactionModel;
+    @Mock private ReactionResponse reactionResponse;
 
     @InjectMocks
     private PostController postController;
@@ -114,13 +123,29 @@ class PostControllerTest {
 
     @Test
     void getBySlug_validSlug_returnsResponse() {
-        when(getPostBySlugUseCase.execute("my-post", Language.ENGLISH)).thenReturn(postModel);
+        var servletRequest = new MockHttpServletRequest();
+        servletRequest.setRemoteAddr("203.0.113.7");
+        when(getPostBySlugUseCase.execute("my-post", Language.ENGLISH, "203.0.113.7")).thenReturn(postModel);
         when(postInputMapper.toResponse(postModel)).thenReturn(postResponse);
 
-        var result = postController.getBySlug("my-post", Language.ENGLISH);
+        var result = postController.getBySlug("my-post", Language.ENGLISH, servletRequest);
 
         assertEquals(postResponse, result);
-        verify(getPostBySlugUseCase).execute("my-post", Language.ENGLISH);
+        verify(getPostBySlugUseCase).execute("my-post", Language.ENGLISH, "203.0.113.7");
+    }
+
+    @Test
+    void react_validRequest_returnsReactionResponse() {
+        var servletRequest = new MockHttpServletRequest();
+        servletRequest.setRemoteAddr("203.0.113.7");
+        when(reactToRequest.reactionType()).thenReturn(ReactionType.LOVE);
+        when(reactToPostUseCase.execute("my-post", ReactionType.LOVE, "203.0.113.7")).thenReturn(reactionModel);
+        when(reactionInputMapper.toResponse(reactionModel)).thenReturn(reactionResponse);
+
+        var result = postController.react("my-post", reactToRequest, servletRequest);
+
+        assertEquals(reactionResponse, result);
+        verify(reactToPostUseCase).execute("my-post", ReactionType.LOVE, "203.0.113.7");
     }
 
     @Test

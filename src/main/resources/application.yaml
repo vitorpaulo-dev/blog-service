@@ -1,9 +1,14 @@
 server:
   port: ${PORT:8080}
+  forward-headers-strategy: framework
 
 spring:
   application:
     name: blog-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/postgres}
     username: ${DB_USERNAME:root}
@@ -50,7 +55,7 @@ clerk:
     api-token: ${CLERK_API_TOKEN:}
 
 turnstile:
-    secret: ${TURNSTILE_SECRET_KEY:}
+    secret-key: ${TURNSTILE_SECRET_KEY:}
 
 r2:
   endpoint: ${R2_ENDPOINT:}

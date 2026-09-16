@@ -5,6 +5,7 @@ import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.PostContentModel;
 import dev.vitorpaulo.blog.model.PostModel;
+import dev.vitorpaulo.blog.model.ReactionModel;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -23,6 +24,8 @@ public interface PostOutputMapper {
 
 	@Mapping(target = "translations", expression = "java(contentsToTranslations(entity.getContents()))")
 	PostModel toModel(PostEntity entity, List<UUID> projectIds, List<UUID> tagIds);
+
+	ReactionModel toReactionModel(PostEntity entity);
 
 	PostContentModel toContentModel(PostContentEntity entity);
 

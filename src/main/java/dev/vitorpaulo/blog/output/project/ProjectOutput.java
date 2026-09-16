@@ -11,6 +11,7 @@ import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
+import dev.vitorpaulo.blog.repository.RedisRepository;
 import dev.vitorpaulo.blog.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -31,6 +33,9 @@ public class ProjectOutput {
 	private final ProjectOutputMapper projectOutputMapper;
 	private final AuthorRepository authorRepository;
 	private final TagRepository tagRepository;
+	private final RedisRepository redisRepository;
+
+	private static final Duration REACTION_TTL = Duration.ofSeconds(604800);
 
 	@Transactional(readOnly = true)
 	public ProjectModel findById(UUID id) {
@@ -40,13 +45,48 @@ public class ProjectOutput {
 	}
 
 	@Transactional
-	public ProjectModel findBySlugAndIncrementView(String slug, Language language) {
+	public ProjectModel findBySlugAndIncrementView(String slug, Language language, String ip) {
 		final var entity = projectRepository.findBySlugAndLanguage(slug, language)
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_SLUG_NOT_FOUND));
-		entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
 
+		final var viewKey = "project:" + entity.getId() + ":view:" + ip;
+		if (!redisRepository.keyExists(viewKey)) {
+			entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
+			projectRepository.save(entity);
+			redisRepository.set(viewKey, Duration.ofHours(48));
+		}
+
+		return projectOutputMapper.toModel(entity, Collections.emptyList());
+	}
+
+	@Transactional
+	public ReactionModel react(String slug, ReactionType reactionType, String ip) {
+		final var entity = projectRepository.findBySlug(slug)
+			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
+
+		final var key = "project:" + entity.getId() + ":reaction:" + ip + ":" + reactionType;
+		if (redisRepository.keyExists(key)) {
+			return projectOutputMapper.toReactionModel(entity);
+		}
+
+		increment(entity, reactionType);
 		final var saved = projectRepository.save(entity);
-		return projectOutputMapper.toModel(saved, Collections.emptyList());
+		redisRepository.set(key, REACTION_TTL);
+
+		return projectOutputMapper.toReactionModel(saved);
+	}
+
+	private void increment(ProjectEntity entity, ReactionType reactionType) {
+		switch (reactionType) {
+			case LOVE -> entity.setLoveCount(next(entity.getLoveCount()));
+			case CELEBRATE -> entity.setCelebrateCount(next(entity.getCelebrateCount()));
+			case GENIUS -> entity.setGeniusCount(next(entity.getGeniusCount()));
+			case HELP -> entity.setHelpCount(next(entity.getHelpCount()));
+		}
+	}
+
+	private Long next(Long current) {
+		return current == null ? 1L : current + 1;
 	}
 
 	@Transactional

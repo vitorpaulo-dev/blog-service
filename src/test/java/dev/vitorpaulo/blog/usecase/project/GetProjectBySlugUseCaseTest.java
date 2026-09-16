@@ -24,19 +24,19 @@ class GetProjectBySlugUseCaseTest {
 
     @Test
     void execute_validSlug_returnsProject() {
-        when(projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH)).thenReturn(expected);
+        when(projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH, "203.0.113.7")).thenReturn(expected);
 
-        var result = getProjectBySlugUseCase.execute("my-project", Language.ENGLISH);
+        var result = getProjectBySlugUseCase.execute("my-project", Language.ENGLISH, "203.0.113.7");
 
         assertEquals(expected, result);
-        verify(projectOutput).findBySlugAndIncrementView("my-project", Language.ENGLISH);
+        verify(projectOutput).findBySlugAndIncrementView("my-project", Language.ENGLISH, "203.0.113.7");
     }
 
     @Test
     void execute_notFound_throwsNotFoundException() {
-        when(projectOutput.findBySlugAndIncrementView(anyString(), any())).thenThrow(new NotFoundException());
+        when(projectOutput.findBySlugAndIncrementView(anyString(), any(), anyString())).thenThrow(new NotFoundException());
 
         assertThrows(NotFoundException.class,
-                () -> getProjectBySlugUseCase.execute("nonexistent", Language.PORTUGUESE));
+                () -> getProjectBySlugUseCase.execute("nonexistent", Language.PORTUGUESE, "203.0.113.7"));
     }
 }
