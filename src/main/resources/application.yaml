@@ -57,6 +57,18 @@ clerk:
 turnstile:
     secret-key: ${TURNSTILE_SECRET_KEY:}
 
+resend:
+  api:
+    url: ${RESEND_API_URL:}
+    key: ${RESEND_API_KEY:}
+  webhook:
+    secret: ${RESEND_WEBHOOK_SECRET:}
+  topics:
+    every-post: ${RESEND_TOPIC_EVERY_POST:}
+    monthly-digest: ${RESEND_TOPIC_MONTHLY_DIGEST:}
+    english: ${RESEND_TOPIC_ENGLISH:}
+    portuguese: ${RESEND_TOPIC_PORTUGUESE:}
+
 r2:
   endpoint: ${R2_ENDPOINT:}
   public-endpoint: ${R2_PUBLIC_ENDPOINT:}
