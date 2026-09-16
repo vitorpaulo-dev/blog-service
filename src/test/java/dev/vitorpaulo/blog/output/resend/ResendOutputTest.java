@@ -41,7 +41,7 @@ class ResendOutputTest {
     }
 
     @Test
-    void createContact_sendsFrequencyAndLanguageTopicsOptIn() {
+    void createContact_optInSelectedTopicsAndOptOutOthers() {
         when(resendFeignClient.createContact(any(ResendCreateContactRequest.class)))
             .thenReturn(new ResendContactResponse("contact-1"));
 
@@ -57,12 +57,14 @@ class ResendOutputTest {
         assertEquals(Boolean.FALSE, request.unsubscribed());
         assertEquals(List.of(
             new ResendTopicSubscriptionRequest("topic-every-post", "opt_in"),
+            new ResendTopicSubscriptionRequest("topic-monthly-digest", "opt_out"),
+            new ResendTopicSubscriptionRequest("topic-english", "opt_out"),
             new ResendTopicSubscriptionRequest("topic-portuguese", "opt_in")
         ), request.topics());
     }
 
     @Test
-    void createContact_resolvesMonthlyDigestAndEnglishTopics() {
+    void createContact_optInMonthlyDigestAndEnglishAndOptOutOthers() {
         when(resendFeignClient.createContact(any(ResendCreateContactRequest.class)))
             .thenReturn(new ResendContactResponse("contact-2"));
 
@@ -72,8 +74,10 @@ class ResendOutputTest {
         verify(resendFeignClient).createContact(captor.capture());
 
         assertEquals(List.of(
+            new ResendTopicSubscriptionRequest("topic-every-post", "opt_out"),
             new ResendTopicSubscriptionRequest("topic-monthly-digest", "opt_in"),
-            new ResendTopicSubscriptionRequest("topic-english", "opt_in")
+            new ResendTopicSubscriptionRequest("topic-english", "opt_in"),
+            new ResendTopicSubscriptionRequest("topic-portuguese", "opt_out")
         ), captor.getValue().topics());
     }
 
@@ -95,8 +99,10 @@ class ResendOutputTest {
         verify(resendFeignClient).updateContactTopics(eq("contact-1"), captor.capture());
 
         assertEquals(List.of(
+            new ResendTopicSubscriptionRequest("topic-every-post", "opt_out"),
             new ResendTopicSubscriptionRequest("topic-monthly-digest", "opt_in"),
-            new ResendTopicSubscriptionRequest("topic-english", "opt_in")
+            new ResendTopicSubscriptionRequest("topic-english", "opt_in"),
+            new ResendTopicSubscriptionRequest("topic-portuguese", "opt_out")
         ), captor.getValue());
     }
 
@@ -114,6 +120,8 @@ class ResendOutputTest {
 
         assertEquals(List.of(
             new ResendTopicSubscriptionRequest("topic-every-post", "opt_in"),
+            new ResendTopicSubscriptionRequest("topic-monthly-digest", "opt_out"),
+            new ResendTopicSubscriptionRequest("topic-english", "opt_out"),
             new ResendTopicSubscriptionRequest("topic-portuguese", "opt_in")
         ), topicsCaptor.getValue());
     }

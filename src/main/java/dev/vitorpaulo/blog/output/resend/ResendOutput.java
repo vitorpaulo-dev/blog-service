@@ -59,16 +59,10 @@ public class ResendOutput {
 
     private List<ResendTopicSubscriptionRequest> topics(Frequency frequency, Language language) {
         return List.of(
-            new ResendTopicSubscriptionRequest(resolveFrequencyTopicId(frequency), OPT_IN),
-            new ResendTopicSubscriptionRequest(resolveLanguageTopicId(language), OPT_IN)
+            new ResendTopicSubscriptionRequest(everyPostTopicId, frequency == Frequency.EVERY_POST ? OPT_IN : OPT_OUT),
+            new ResendTopicSubscriptionRequest(monthlyDigestTopicId, frequency == Frequency.MONTHLY_DIGEST ? OPT_IN : OPT_OUT),
+            new ResendTopicSubscriptionRequest(englishTopicId, language == Language.ENGLISH ? OPT_IN : OPT_OUT),
+            new ResendTopicSubscriptionRequest(portugueseTopicId, language == Language.PORTUGUESE ? OPT_IN : OPT_OUT)
         );
-    }
-
-    private String resolveFrequencyTopicId(Frequency frequency) {
-        return frequency == Frequency.EVERY_POST ? everyPostTopicId : monthlyDigestTopicId;
-    }
-
-    private String resolveLanguageTopicId(Language language) {
-        return language == Language.ENGLISH ? englishTopicId : portugueseTopicId;
     }
 }
