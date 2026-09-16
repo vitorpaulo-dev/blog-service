@@ -24,19 +24,19 @@ class GetPostBySlugUseCaseTest {
 
     @Test
     void execute_validSlug_returnsPost() {
-        when(postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH)).thenReturn(expected);
+        when(postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "203.0.113.7")).thenReturn(expected);
 
-        var result = getPostBySlugUseCase.execute("my-post", Language.ENGLISH);
+        var result = getPostBySlugUseCase.execute("my-post", Language.ENGLISH, "203.0.113.7");
 
         assertEquals(expected, result);
-        verify(postOutput).findBySlugAndIncrementView("my-post", Language.ENGLISH);
+        verify(postOutput).findBySlugAndIncrementView("my-post", Language.ENGLISH, "203.0.113.7");
     }
 
     @Test
     void execute_notFound_throwsNotFoundException() {
-        when(postOutput.findBySlugAndIncrementView(anyString(), any())).thenThrow(new NotFoundException());
+        when(postOutput.findBySlugAndIncrementView(anyString(), any(), anyString())).thenThrow(new NotFoundException());
 
         assertThrows(NotFoundException.class,
-                () -> getPostBySlugUseCase.execute("nonexistent", Language.PORTUGUESE));
+                () -> getPostBySlugUseCase.execute("nonexistent", Language.PORTUGUESE, "203.0.113.7"));
     }
 }

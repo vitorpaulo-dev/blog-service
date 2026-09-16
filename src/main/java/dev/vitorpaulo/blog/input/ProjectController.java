@@ -1,18 +1,23 @@
 package dev.vitorpaulo.blog.input;
 
 import dev.vitorpaulo.blog.common.dto.GenericPageableResponse;
+import dev.vitorpaulo.blog.config.captcha.ValidateCaptcha;
 import dev.vitorpaulo.blog.config.security.CurrentAuthor;
 import dev.vitorpaulo.blog.input.mapper.ProjectInputMapper;
+import dev.vitorpaulo.blog.input.mapper.ReactionInputMapper;
 import dev.vitorpaulo.blog.input.request.CreateProjectRequest;
 import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
 import dev.vitorpaulo.blog.common.dto.GenericPageableRequest;
 import dev.vitorpaulo.blog.input.request.ProjectBatchRequest;
 import dev.vitorpaulo.blog.input.request.ProjectQueryRequest;
+import dev.vitorpaulo.blog.input.request.ReactToRequest;
 import dev.vitorpaulo.blog.input.request.UpdateProjectRequest;
 import dev.vitorpaulo.blog.input.response.ProjectResponse;
+import dev.vitorpaulo.blog.input.response.ReactionResponse;
 import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.usecase.project.*;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,6 +41,8 @@ public class ProjectController {
     private final SearchProjectUseCase searchProjectUseCase;
 
     private final ProjectInputMapper projectInputMapper;
+    private final ReactionInputMapper reactionInputMapper;
+    private final ReactToProjectUseCase reactToProjectUseCase;
 	private final GetProjectByBatchUseCase getProjectByBatchUseCase;
 
 	@PostMapping
@@ -63,8 +70,8 @@ public class ProjectController {
     }
 
     @GetMapping("/slug/{slug}/{language}")
-    public ProjectResponse getBySlug(@PathVariable String slug, @PathVariable Language language) {
-        return projectInputMapper.toResponse(getProjectBySlugUseCase.execute(slug, language));
+    public ProjectResponse getBySlug(@PathVariable String slug, @PathVariable Language language, HttpServletRequest servletRequest) {
+        return projectInputMapper.toResponse(getProjectBySlugUseCase.execute(slug, language, servletRequest.getRemoteAddr()));
     }
 
     @PostMapping("/search")
@@ -78,5 +85,12 @@ public class ProjectController {
         return getProjectByBatchUseCase.execute(request.ids(), request.language()).stream()
             .map(projectInputMapper::toResponse)
             .toList();
+    }
+
+    @PostMapping("/{slug}/react")
+    @ValidateCaptcha
+    @ResponseStatus(HttpStatus.OK)
+    public ReactionResponse react(@PathVariable String slug, @Valid @RequestBody ReactToRequest request, HttpServletRequest servletRequest) {
+        return reactionInputMapper.toResponse(reactToProjectUseCase.execute(slug, request.reactionType(), servletRequest.getRemoteAddr()));
     }
 }

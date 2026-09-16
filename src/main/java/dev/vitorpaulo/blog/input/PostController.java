@@ -1,15 +1,19 @@
 package dev.vitorpaulo.blog.input;
 
 import dev.vitorpaulo.blog.common.dto.GenericPageableResponse;
+import dev.vitorpaulo.blog.config.captcha.ValidateCaptcha;
 import dev.vitorpaulo.blog.config.security.CurrentAuthor;
 import dev.vitorpaulo.blog.input.mapper.PostInputMapper;
+import dev.vitorpaulo.blog.input.mapper.ReactionInputMapper;
 import dev.vitorpaulo.blog.input.request.CreatePostRequest;
 import dev.vitorpaulo.blog.input.request.FeaturedPostRequest;
 import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
 import dev.vitorpaulo.blog.common.dto.GenericPageableRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
+import dev.vitorpaulo.blog.input.request.ReactToRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
 import dev.vitorpaulo.blog.input.response.PostResponse;
+import dev.vitorpaulo.blog.input.response.ReactionResponse;
 import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.output.post.PostOutput;
@@ -18,9 +22,11 @@ import dev.vitorpaulo.blog.usecase.post.DeletePostUseCase;
 import dev.vitorpaulo.blog.usecase.post.GetFeaturedPostsUseCase;
 import dev.vitorpaulo.blog.usecase.post.GetPostByIdUseCase;
 import dev.vitorpaulo.blog.usecase.post.GetPostBySlugUseCase;
+import dev.vitorpaulo.blog.usecase.post.ReactToPostUseCase;
 import dev.vitorpaulo.blog.usecase.post.SearchPostUseCase;
 import dev.vitorpaulo.blog.usecase.post.SetPostFeaturedWeightsUseCase;
 import dev.vitorpaulo.blog.usecase.post.UpdatePostUseCase;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -41,11 +47,13 @@ public class PostController {
     private final DeletePostUseCase deletePostUseCase;
     private final GetPostByIdUseCase getPostByIdUseCase;
     private final GetPostBySlugUseCase getPostBySlugUseCase;
+    private final ReactToPostUseCase reactToPostUseCase;
     private final SearchPostUseCase searchPostUseCase;
     private final SetPostFeaturedWeightsUseCase setPostFeaturedWeightsUseCase;
     private final GetFeaturedPostsUseCase getFeaturedPostsUseCase;
 
     private final PostInputMapper postInputMapper;
+    private final ReactionInputMapper reactionInputMapper;
     private final PostOutput postOutput;
 
     @PostMapping
@@ -73,8 +81,15 @@ public class PostController {
     }
 
     @GetMapping("/slug/{slug}/{language}")
-    public PostResponse getBySlug(@PathVariable String slug, @PathVariable Language language) {
-        return postInputMapper.toResponse(getPostBySlugUseCase.execute(slug, language));
+    public PostResponse getBySlug(@PathVariable String slug, @PathVariable Language language, HttpServletRequest servletRequest) {
+        return postInputMapper.toResponse(getPostBySlugUseCase.execute(slug, language, servletRequest.getRemoteAddr()));
+    }
+
+    @PostMapping("/{slug}/react")
+    @ValidateCaptcha
+    @ResponseStatus(HttpStatus.OK)
+    public ReactionResponse react(@PathVariable String slug, @Valid @RequestBody ReactToRequest request, HttpServletRequest servletRequest) {
+        return reactionInputMapper.toResponse(reactToPostUseCase.execute(slug, request.reactionType(), servletRequest.getRemoteAddr()));
     }
 
     @PostMapping("/featured")

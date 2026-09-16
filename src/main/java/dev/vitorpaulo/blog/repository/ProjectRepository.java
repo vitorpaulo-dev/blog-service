@@ -40,6 +40,8 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
 	""")
 	Optional<ProjectEntity> findBySlugAndLanguage(String slug, Language language);
 
+    Optional<ProjectEntity> findBySlug(String slug);
+
     long countBySlugAndIdNot(String slug, UUID id);
 
     @Query(

@@ -1,18 +1,18 @@
 package dev.vitorpaulo.blog.usecase.project;
 
-import dev.vitorpaulo.blog.model.Language;
-import dev.vitorpaulo.blog.model.ProjectModel;
+import dev.vitorpaulo.blog.model.ReactionModel;
+import dev.vitorpaulo.blog.model.ReactionType;
 import dev.vitorpaulo.blog.output.project.ProjectOutput;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class GetProjectBySlugUseCase {
+public class ReactToProjectUseCase {
 
     private final ProjectOutput projectOutput;
 
-    public ProjectModel execute(String slug, Language language, String ip) {
-        return projectOutput.findBySlugAndIncrementView(slug, language, ip);
+    public ReactionModel execute(String slug, ReactionType reactionType, String ip) {
+        return projectOutput.react(slug, reactionType, ip);
     }
 }

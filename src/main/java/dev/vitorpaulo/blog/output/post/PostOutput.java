@@ -17,10 +17,12 @@ import dev.vitorpaulo.blog.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -30,11 +32,16 @@ import static dev.vitorpaulo.blog.common.util.RoleUtils.isAdmin;
 @RequiredArgsConstructor
 public class PostOutput {
 
-    private final PostRepository postRepository;
+	private final PostRepository postRepository;
     private final PostOutputMapper postOutputMapper;
 	private final ProjectRepository projectRepository;
 	private final TagRepository tagRepository;
 	private final AuthorRepository authorRepository;
+	private final StringRedisTemplate stringRedisTemplate;
+
+	private static final String KEY_PREFIX = "post:";
+	private static final Duration VIEW_TTL = Duration.ofHours(48);
+	private static final Duration REACTION_TTL = Duration.ofSeconds(604800);
 
     @Transactional(readOnly = true)
     public PostModel findById(UUID id) {
@@ -48,13 +55,49 @@ public class PostOutput {
     }
 
     @Transactional
-    public PostModel findBySlugAndIncrementView(String slug, Language language) {
+    public ReactionModel react(String slug, ReactionType reactionType, String ip) {
+        final var entity = postRepository.findBySlug(slug)
+                .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
+
+        final var key = KEY_PREFIX + entity.getId() + ":reaction:" + ip + ":" + reactionType;
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+            return postOutputMapper.toReactionModel(entity);
+        }
+
+        increment(entity, reactionType);
+        final var saved = postRepository.save(entity);
+        stringRedisTemplate.opsForValue().set(key, "reacted", REACTION_TTL);
+
+        return postOutputMapper.toReactionModel(saved);
+    }
+
+    private void increment(PostEntity entity, ReactionType reactionType) {
+        switch (reactionType) {
+            case LOVE -> entity.setLoveCount(next(entity.getLoveCount()));
+            case CELEBRATE -> entity.setCelebrateCount(next(entity.getCelebrateCount()));
+            case GENIUS -> entity.setGeniusCount(next(entity.getGeniusCount()));
+            case HELP -> entity.setHelpCount(next(entity.getHelpCount()));
+        }
+    }
+
+    private Long next(Long current) {
+        return current == null ? 1L : current + 1;
+    }
+
+    @Transactional
+    public PostModel findBySlugAndIncrementView(String slug, Language language, String ip) {
         final var entity = postRepository.findBySlugAndLanguage(slug, language)
                 .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_SLUG_NOT_FOUND));
-        entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
 
-        return postOutputMapper.toModel(
-			postRepository.save(entity),
+        final var viewKey = KEY_PREFIX + entity.getId() + ":view:" + ip;
+        if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(viewKey))) {
+            entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
+            postRepository.save(entity);
+            stringRedisTemplate.opsForValue().set(viewKey, "viewed", VIEW_TTL);
+        }
+
+		return postOutputMapper.toModel(
+			entity,
 			postRepository.findProjectIds(entity.getId()),
 			postRepository.findTagIds(entity.getId())
 		);

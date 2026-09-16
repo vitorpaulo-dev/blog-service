@@ -5,12 +5,15 @@ import dev.vitorpaulo.blog.common.dto.GenericPageableResponse;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.input.mapper.ProjectInputMapper;
+import dev.vitorpaulo.blog.input.mapper.ReactionInputMapper;
 import dev.vitorpaulo.blog.input.request.CreateProjectRequest;
 import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
 import dev.vitorpaulo.blog.input.request.ProjectBatchRequest;
 import dev.vitorpaulo.blog.input.request.ProjectQueryRequest;
+import dev.vitorpaulo.blog.input.request.ReactToRequest;
 import dev.vitorpaulo.blog.input.request.UpdateProjectRequest;
 import dev.vitorpaulo.blog.input.response.ProjectResponse;
+import dev.vitorpaulo.blog.input.response.ReactionResponse;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -50,6 +54,11 @@ class ProjectControllerTest {
     @Mock private PaginatedOutput<ProjectModel> paginatedOutput;
     @Mock private GenericPageableResponse<ProjectResponse> pageableResponse;
     @Mock private ProjectBatchRequest batchRequest;
+    @Mock private ReactionInputMapper reactionInputMapper;
+    @Mock private ReactToProjectUseCase reactToProjectUseCase;
+    @Mock private ReactToRequest reactToRequest;
+    @Mock private ReactionModel reactionModel;
+    @Mock private ReactionResponse reactionResponse;
 
     @InjectMocks
     private ProjectController projectController;
@@ -111,13 +120,15 @@ class ProjectControllerTest {
 
     @Test
     void getBySlug_validSlug_returnsResponse() {
-        when(getProjectBySlugUseCase.execute("my-project", Language.ENGLISH)).thenReturn(projectModel);
+        var servletRequest = new MockHttpServletRequest();
+        servletRequest.setRemoteAddr("203.0.113.7");
+        when(getProjectBySlugUseCase.execute("my-project", Language.ENGLISH, "203.0.113.7")).thenReturn(projectModel);
         when(projectInputMapper.toResponse(projectModel)).thenReturn(projectResponse);
 
-        var result = projectController.getBySlug("my-project", Language.ENGLISH);
+        var result = projectController.getBySlug("my-project", Language.ENGLISH, servletRequest);
 
         assertEquals(projectResponse, result);
-        verify(getProjectBySlugUseCase).execute("my-project", Language.ENGLISH);
+        verify(getProjectBySlugUseCase).execute("my-project", Language.ENGLISH, "203.0.113.7");
     }
 
     @Test
@@ -143,5 +154,19 @@ class ProjectControllerTest {
 
         assertEquals(1, result.size());
         assertEquals(projectResponse, result.getFirst());
+    }
+
+    @Test
+    void react_validRequest_returnsReactionResponse() {
+        var servletRequest = new MockHttpServletRequest();
+        servletRequest.setRemoteAddr("203.0.113.7");
+        when(reactToRequest.reactionType()).thenReturn(ReactionType.LOVE);
+        when(reactToProjectUseCase.execute("my-project", ReactionType.LOVE, "203.0.113.7")).thenReturn(reactionModel);
+        when(reactionInputMapper.toResponse(reactionModel)).thenReturn(reactionResponse);
+
+        var result = projectController.react("my-project", reactToRequest, servletRequest);
+
+        assertEquals(reactionResponse, result);
+        verify(reactToProjectUseCase).execute("my-project", ReactionType.LOVE, "203.0.113.7");
     }
 }

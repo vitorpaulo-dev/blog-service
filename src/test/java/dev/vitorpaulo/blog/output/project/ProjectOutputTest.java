@@ -13,14 +13,19 @@ import dev.vitorpaulo.blog.repository.TagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,6 +45,8 @@ class ProjectOutputTest {
     @Mock private ProjectOutputMapper projectOutputMapper;
     @Mock private AuthorRepository authorRepository;
     @Mock private TagRepository tagRepository;
+    @Mock private StringRedisTemplate stringRedisTemplate;
+    @Mock private ValueOperations<String, String> valueOperations;
     @Mock private AuthorModel author;
     @Mock private ProjectModel project;
     @Mock private ProjectModel expectedResult;
@@ -82,26 +89,50 @@ class ProjectOutputTest {
 
     @Test
     void findBySlugAndIncrementView_found_incrementsViewCount() {
+        var projectId = UUID.randomUUID();
         when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
+        when(projectEntity.getId()).thenReturn(projectId);
+        when(stringRedisTemplate.hasKey(eq("project:" + projectId + ":view:1.2.3.4"))).thenReturn(false);
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         when(projectEntity.getViewCount()).thenReturn(5L);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
         when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
 
-        var result = projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH);
+        var result = projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH, "1.2.3.4");
 
         verify(projectEntity).setViewCount(6L);
         assertEquals(expectedResult, result);
+        verify(valueOperations).set(eq("project:" + projectId + ":view:1.2.3.4"), eq("viewed"), eq(Duration.ofHours(48)));
     }
 
     @Test
     void findBySlugAndIncrementView_nullViewCount_setsToOne() {
+        var projectId = UUID.randomUUID();
         when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
+        when(projectEntity.getId()).thenReturn(projectId);
+        when(stringRedisTemplate.hasKey(eq("project:" + projectId + ":view:1.2.3.4"))).thenReturn(false);
         when(projectEntity.getViewCount()).thenReturn(null);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
 
-        projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH);
+        projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH, "1.2.3.4");
 
         verify(projectEntity).setViewCount(1L);
+        verify(valueOperations).set(eq("project:" + projectId + ":view:1.2.3.4"), eq("viewed"), eq(Duration.ofHours(48)));
+    }
+
+    @Test
+    void findBySlugAndIncrementView_keyAlreadyExists_doesNotIncrement() {
+        var projectId = UUID.randomUUID();
+        when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
+        when(projectEntity.getId()).thenReturn(projectId);
+        when(stringRedisTemplate.hasKey("project:" + projectId + ":view:1.2.3.4")).thenReturn(true);
+
+        projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH, "1.2.3.4");
+
+        verify(projectEntity, never()).setViewCount(anyLong());
+        verify(projectRepository, never()).save(any());
+        verify(stringRedisTemplate, never()).opsForValue();
     }
 
     @Test
@@ -109,8 +140,72 @@ class ProjectOutputTest {
         when(projectRepository.findBySlugAndLanguage(anyString(), any())).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class,
-                () -> projectOutput.findBySlugAndIncrementView("nonexistent", Language.ENGLISH));
+                () -> projectOutput.findBySlugAndIncrementView("nonexistent", Language.ENGLISH, "1.2.3.4"));
         assertEquals(ExceptionCode.PROJECT_SLUG_NOT_FOUND, ex.getCode());
+    }
+
+    @ParameterizedTest
+    @EnumSource(ReactionType.class)
+    void react_keyAbsent_incrementsCountSavesAndSetsKey(ReactionType reactionType) {
+        var projectId = UUID.randomUUID();
+        stubReactionCount(reactionType, 1L);
+        when(projectRepository.findBySlug("my-project")).thenReturn(Optional.of(projectEntity));
+        when(projectEntity.getId()).thenReturn(projectId);
+        when(stringRedisTemplate.hasKey(anyString())).thenReturn(false);
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
+        when(projectOutputMapper.toReactionModel(projectEntity)).thenReturn(new ReactionModel(1L, 1L, 1L, 1L, 4L));
+
+        var result = projectOutput.react("my-project", reactionType, "203.0.113.7");
+
+        assertEquals(4L, result.reactionCount());
+        assertReactionIncremented(reactionType, projectEntity);
+        verify(valueOperations).set("project:" + projectId + ":reaction:203.0.113.7:" + reactionType, "reacted", Duration.ofSeconds(604800));
+    }
+
+    @ParameterizedTest
+    @EnumSource(ReactionType.class)
+    void react_keyAlreadyPresent_returnsCountsUnchanged(ReactionType reactionType) {
+        var projectId = UUID.randomUUID();
+        var expected = new ReactionModel(1L, 2L, 3L, 4L, 10L);
+        when(projectRepository.findBySlug("my-project")).thenReturn(Optional.of(projectEntity));
+        when(projectEntity.getId()).thenReturn(projectId);
+        when(stringRedisTemplate.hasKey("project:" + projectId + ":reaction:203.0.113.7:" + reactionType)).thenReturn(true);
+        when(projectOutputMapper.toReactionModel(projectEntity)).thenReturn(expected);
+
+        var result = projectOutput.react("my-project", reactionType, "203.0.113.7");
+
+        assertEquals(expected, result);
+        verify(projectRepository, never()).save(any());
+        verify(stringRedisTemplate, never()).opsForValue();
+    }
+
+    @Test
+    void react_unknownSlug_throwsNotFoundException() {
+        when(projectRepository.findBySlug("nonexistent")).thenReturn(Optional.empty());
+
+        var ex = assertThrows(NotFoundException.class,
+                () -> projectOutput.react("nonexistent", ReactionType.LOVE, "203.0.113.7"));
+        assertEquals(ExceptionCode.PROJECT_NOT_FOUND, ex.getCode());
+        verifyNoInteractions(stringRedisTemplate);
+    }
+
+    private void stubReactionCount(ReactionType reactionType, long current) {
+        switch (reactionType) {
+            case LOVE -> when(projectEntity.getLoveCount()).thenReturn(current);
+            case CELEBRATE -> when(projectEntity.getCelebrateCount()).thenReturn(current);
+            case GENIUS -> when(projectEntity.getGeniusCount()).thenReturn(current);
+            case HELP -> when(projectEntity.getHelpCount()).thenReturn(current);
+        }
+    }
+
+    private void assertReactionIncremented(ReactionType reactionType, ProjectEntity entity) {
+        switch (reactionType) {
+            case LOVE -> verify(entity).setLoveCount(2L);
+            case CELEBRATE -> verify(entity).setCelebrateCount(2L);
+            case GENIUS -> verify(entity).setGeniusCount(2L);
+            case HELP -> verify(entity).setHelpCount(2L);
+        }
     }
 
     @Test

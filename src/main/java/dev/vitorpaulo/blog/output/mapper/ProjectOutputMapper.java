@@ -22,6 +22,8 @@ public interface ProjectOutputMapper {
     @Mapping(target = "translations", expression = "java(contentsToTranslations(entity.getContents()))")
     ProjectModel toModel(ProjectEntity entity, List<UUID> tagIds);
 
+    ReactionModel toReactionModel(ProjectEntity entity);
+
     ProjectContentModel toContentModel(ProjectContentEntity entity);
 
     default Map<Language, ProjectContentModel> contentsToTranslations(List<ProjectContentEntity> contents) {
