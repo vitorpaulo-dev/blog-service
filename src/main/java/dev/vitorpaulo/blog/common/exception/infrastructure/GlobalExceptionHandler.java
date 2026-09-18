@@ -1,6 +1,7 @@
 package dev.vitorpaulo.blog.common.exception.infrastructure;
 
 import dev.vitorpaulo.blog.common.exception.InternalException;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.ResponseEntity;
@@ -44,6 +45,22 @@ public class GlobalExceptionHandler {
                                 .collect(Collectors.toMap(
                                         FieldError::getField,
                                         error -> StringUtils.defaultIfBlank(error.getDefaultMessage(), "")
+                                ))
+                )
+        );
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<BusinessErrorResponse> handleConstraintViolationException(ConstraintViolationException exception) {
+        return ResponseEntity.badRequest().body(
+                new BusinessErrorResponse(
+                        ExceptionCode.FIELD_VALIDATION,
+                        LocalDateTime.now(),
+                        exception.getConstraintViolations()
+                                .stream()
+                                .collect(Collectors.toMap(
+                                        violation -> violation.getPropertyPath().toString(),
+                                        violation -> StringUtils.defaultIfBlank(violation.getMessage(), "")
                                 ))
                 )
         );

@@ -2,6 +2,8 @@ package dev.vitorpaulo.blog.repository;
 
 import dev.vitorpaulo.blog.domain.ProjectEntity;
 import dev.vitorpaulo.blog.model.Language;
+import dev.vitorpaulo.blog.model.ProjectStatus;
+import dev.vitorpaulo.blog.model.TopItemModel;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -170,4 +172,29 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
           )
     """)
     Optional<ProjectEntity> findByIdWithAuthor(UUID id, UUID author, Boolean bypass);
+
+    long countByStatus(ProjectStatus status);
+
+    @Query("SELECT COALESCE(SUM(p.viewCount), 0) FROM ProjectEntity p")
+    Long sumViewCount();
+
+    @Query("SELECT COALESCE(SUM(p.loveCount + p.celebrateCount + p.geniusCount + p.helpCount), 0) FROM ProjectEntity p")
+    Long sumReactionCount();
+
+    @Query("""
+        SELECT new dev.vitorpaulo.blog.model.TopItemModel(
+            p.id,
+            COALESCE(
+                (SELECT pc.title FROM ProjectContentEntity pc WHERE pc.project = p AND pc.language = :primary),
+                (SELECT pc2.title FROM ProjectContentEntity pc2 WHERE pc2.project = p ORDER BY pc2.language LIMIT 1)
+            ),
+            p.slug,
+            COALESCE(p.viewCount, 0),
+            COALESCE(p.loveCount + p.celebrateCount + p.geniusCount + p.helpCount, 0),
+            p.createdAt
+        )
+        FROM ProjectEntity p
+        ORDER BY p.viewCount DESC
+    """)
+    List<TopItemModel> findTopByViewCount(Pageable pageable, Language primary);
 }

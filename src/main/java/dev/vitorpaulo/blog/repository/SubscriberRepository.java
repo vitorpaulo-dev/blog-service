@@ -17,6 +17,8 @@ public interface SubscriberRepository extends JpaRepository<SubscriberEntity, UU
 
     Optional<SubscriberEntity> findByEmail(String email);
 
+    long countByStatus(SubscriberStatus status);
+
     @Query("""
         SELECT s
         FROM SubscriberEntity s
