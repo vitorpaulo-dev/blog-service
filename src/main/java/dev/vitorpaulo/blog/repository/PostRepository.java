@@ -2,6 +2,8 @@ package dev.vitorpaulo.blog.repository;
 
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.model.Language;
+import dev.vitorpaulo.blog.model.PostStatus;
+import dev.vitorpaulo.blog.model.TopItemModel;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -195,4 +197,29 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
         WHERE p.id = :postId
     """)
     void updateWeight(UUID postId, Integer weight);
+
+    long countByStatus(PostStatus status);
+
+    @Query("SELECT COALESCE(SUM(p.viewCount), 0) FROM PostEntity p")
+    Long sumViewCount();
+
+    @Query("SELECT COALESCE(SUM(p.loveCount + p.celebrateCount + p.geniusCount + p.helpCount), 0) FROM PostEntity p")
+    Long sumReactionCount();
+
+    @Query("""
+        SELECT new dev.vitorpaulo.blog.model.TopItemModel(
+            p.id,
+            COALESCE(
+                (SELECT pc.title FROM PostContentEntity pc WHERE pc.post = p AND pc.language = :primary),
+                (SELECT pc2.title FROM PostContentEntity pc2 WHERE pc2.post = p ORDER BY pc2.language LIMIT 1)
+            ),
+            p.slug,
+            COALESCE(p.viewCount, 0),
+            COALESCE(p.loveCount + p.celebrateCount + p.geniusCount + p.helpCount, 0),
+            p.createdAt
+        )
+        FROM PostEntity p
+        ORDER BY p.viewCount DESC
+    """)
+    List<TopItemModel> findTopByViewCount(Pageable pageable, Language primary);
 }

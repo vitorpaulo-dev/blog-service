@@ -51,6 +51,7 @@ public class SecurityConfig {
 			.requestMatchers(HttpMethod.POST, "/v1/tag/batch").permitAll()
 			.requestMatchers("/v1/tag/**").authenticated()
 			.requestMatchers("/v1/newsletter/subscriber/**").authenticated()
+			.requestMatchers("/v1/dashboard/**").authenticated()
 			.requestMatchers(HttpMethod.POST, "/v1/upload/presign").authenticated()
 				.anyRequest().permitAll()
 			)

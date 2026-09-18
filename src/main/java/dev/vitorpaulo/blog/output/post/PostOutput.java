@@ -40,6 +40,8 @@ public class PostOutput {
 	private final RedisRepository redisRepository;
 
 	private static final String KEY_PREFIX = "post:";
+	private static final String VIEWS_KEY_SUFFIX = ":views";
+	private static final String REACTIONS_KEY_SUFFIX = ":reactions";
 	private static final Duration VIEW_TTL = Duration.ofHours(48);
 	private static final Duration REACTION_TTL = Duration.ofSeconds(604800);
 
@@ -64,9 +66,16 @@ public class PostOutput {
             return postOutputMapper.toReactionModel(entity);
         }
 
+        final var now = System.currentTimeMillis();
         increment(entity, reactionType);
         final var saved = postRepository.save(entity);
         redisRepository.set(key, REACTION_TTL);
+        redisRepository.addToSortedSet(
+                KEY_PREFIX + entity.getId() + REACTIONS_KEY_SUFFIX,
+                ip + ":" + reactionType + ":" + now,
+                now,
+                REACTION_TTL
+        );
 
         return postOutputMapper.toReactionModel(saved);
     }
@@ -91,9 +100,16 @@ public class PostOutput {
 
         final var viewKey = KEY_PREFIX + entity.getId() + ":view:" + ip;
         if (!redisRepository.keyExists(viewKey)) {
+            final var now = System.currentTimeMillis();
             entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
             postRepository.save(entity);
             redisRepository.set(viewKey, VIEW_TTL);
+            redisRepository.addToSortedSet(
+                    KEY_PREFIX + entity.getId() + VIEWS_KEY_SUFFIX,
+                    ip + ":" + now,
+                    now,
+                    VIEW_TTL
+            );
         }
 
 		return postOutputMapper.toModel(

@@ -35,6 +35,10 @@ public class ProjectOutput {
 	private final TagRepository tagRepository;
 	private final RedisRepository redisRepository;
 
+	private static final String KEY_PREFIX = "project:";
+	private static final String VIEWS_KEY_SUFFIX = ":views";
+	private static final String REACTIONS_KEY_SUFFIX = ":reactions";
+	private static final Duration VIEW_TTL = Duration.ofHours(48);
 	private static final Duration REACTION_TTL = Duration.ofSeconds(604800);
 
 	@Transactional(readOnly = true)
@@ -49,11 +53,18 @@ public class ProjectOutput {
 		final var entity = projectRepository.findBySlugAndLanguage(slug, language)
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_SLUG_NOT_FOUND));
 
-		final var viewKey = "project:" + entity.getId() + ":view:" + ip;
+		final var viewKey = KEY_PREFIX + entity.getId() + ":view:" + ip;
 		if (!redisRepository.keyExists(viewKey)) {
+			final var now = System.currentTimeMillis();
 			entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
 			projectRepository.save(entity);
-			redisRepository.set(viewKey, Duration.ofHours(48));
+			redisRepository.set(viewKey, VIEW_TTL);
+			redisRepository.addToSortedSet(
+					KEY_PREFIX + entity.getId() + VIEWS_KEY_SUFFIX,
+					ip + ":" + now,
+					now,
+					VIEW_TTL
+			);
 		}
 
 		return projectOutputMapper.toModel(entity, Collections.emptyList());
@@ -64,14 +75,21 @@ public class ProjectOutput {
 		final var entity = projectRepository.findBySlug(slug)
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
 
-		final var key = "project:" + entity.getId() + ":reaction:" + ip + ":" + reactionType;
+		final var key = KEY_PREFIX + entity.getId() + ":reaction:" + ip + ":" + reactionType;
 		if (redisRepository.keyExists(key)) {
 			return projectOutputMapper.toReactionModel(entity);
 		}
 
+		final var now = System.currentTimeMillis();
 		increment(entity, reactionType);
 		final var saved = projectRepository.save(entity);
 		redisRepository.set(key, REACTION_TTL);
+		redisRepository.addToSortedSet(
+				KEY_PREFIX + entity.getId() + REACTIONS_KEY_SUFFIX,
+				ip + ":" + reactionType + ":" + now,
+				now,
+				REACTION_TTL
+		);
 
 		return projectOutputMapper.toReactionModel(saved);
 	}
