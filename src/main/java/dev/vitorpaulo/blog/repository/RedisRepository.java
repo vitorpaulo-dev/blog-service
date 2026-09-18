@@ -21,4 +21,14 @@ public class RedisRepository {
 	public void set(String key, Duration ttl) {
 		stringRedisTemplate.opsForValue().set(key, DEFAULT_VALUE, ttl);
 	}
+
+	public void addToSortedSet(String key, String member, double score, Duration ttl) {
+		stringRedisTemplate.opsForZSet().add(key, member, score);
+		stringRedisTemplate.expire(key, ttl);
+	}
+
+	public long countInRange(String key, double min, double max) {
+		final var count = stringRedisTemplate.opsForZSet().count(key, min, max);
+		return count == null ? 0L : count;
+	}
 }

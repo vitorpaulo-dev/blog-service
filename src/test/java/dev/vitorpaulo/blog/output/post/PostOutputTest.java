@@ -101,6 +101,7 @@ class PostOutputTest {
         verify(postEntity).setViewCount(6L);
         verify(postOutputMapper).toModel(eq(postEntity), anyList(), anyList());
         verify(redisRepository).set(eq("post:" + postId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
+        verify(redisRepository).addToSortedSet(eq("post:" + postId + ":views"), startsWith("1.2.3.4:"), anyDouble(), eq(Duration.ofHours(48)));
     }
 
     @Test
@@ -116,6 +117,7 @@ class PostOutputTest {
 
         verify(postEntity).setViewCount(1L);
         verify(redisRepository).set(eq("post:" + postId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
+        verify(redisRepository).addToSortedSet(eq("post:" + postId + ":views"), startsWith("1.2.3.4:"), anyDouble(), eq(Duration.ofHours(48)));
     }
 
     @Test
@@ -130,6 +132,7 @@ class PostOutputTest {
         verify(postEntity, never()).setViewCount(anyLong());
         verify(postRepository, never()).save(any());
         verify(redisRepository, never()).set(anyString(), any());
+        verify(redisRepository, never()).addToSortedSet(anyString(), anyString(), anyDouble(), any());
     }
 
     @Test
@@ -157,6 +160,7 @@ class PostOutputTest {
         assertEquals(4L, result.reactionCount());
         assertReactionIncremented(reactionType, postEntity);
         verify(redisRepository).set("post:" + postId + ":reaction:203.0.113.7:" + reactionType, Duration.ofSeconds(604800));
+        verify(redisRepository).addToSortedSet(eq("post:" + postId + ":reactions"), startsWith("203.0.113.7:" + reactionType + ":"), anyDouble(), eq(Duration.ofSeconds(604800)));
     }
 
     @ParameterizedTest
@@ -174,6 +178,7 @@ class PostOutputTest {
         assertEquals(expected, result);
         verify(postRepository, never()).save(any());
         verify(redisRepository, never()).set(anyString(), any());
+        verify(redisRepository, never()).addToSortedSet(anyString(), anyString(), anyDouble(), any());
     }
 
     @Test

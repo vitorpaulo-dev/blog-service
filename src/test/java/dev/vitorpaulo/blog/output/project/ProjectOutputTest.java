@@ -100,6 +100,7 @@ class ProjectOutputTest {
         verify(projectEntity).setViewCount(6L);
         assertEquals(expectedResult, result);
         verify(redisRepository).set(eq("project:" + projectId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
+        verify(redisRepository).addToSortedSet(eq("project:" + projectId + ":views"), startsWith("1.2.3.4:"), anyDouble(), eq(Duration.ofHours(48)));
     }
 
     @Test
@@ -115,6 +116,7 @@ class ProjectOutputTest {
 
         verify(projectEntity).setViewCount(1L);
         verify(redisRepository).set(eq("project:" + projectId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
+        verify(redisRepository).addToSortedSet(eq("project:" + projectId + ":views"), startsWith("1.2.3.4:"), anyDouble(), eq(Duration.ofHours(48)));
     }
 
     @Test
@@ -129,6 +131,7 @@ class ProjectOutputTest {
         verify(projectEntity, never()).setViewCount(anyLong());
         verify(projectRepository, never()).save(any());
         verify(redisRepository, never()).set(anyString(), any());
+        verify(redisRepository, never()).addToSortedSet(anyString(), anyString(), anyDouble(), any());
     }
 
     @Test
@@ -156,6 +159,7 @@ class ProjectOutputTest {
         assertEquals(4L, result.reactionCount());
         assertReactionIncremented(reactionType, projectEntity);
         verify(redisRepository).set("project:" + projectId + ":reaction:203.0.113.7:" + reactionType, Duration.ofSeconds(604800));
+        verify(redisRepository).addToSortedSet(eq("project:" + projectId + ":reactions"), startsWith("203.0.113.7:" + reactionType + ":"), anyDouble(), eq(Duration.ofSeconds(604800)));
     }
 
     @ParameterizedTest
@@ -173,6 +177,7 @@ class ProjectOutputTest {
         assertEquals(expected, result);
         verify(projectRepository, never()).save(any());
         verify(redisRepository, never()).set(anyString(), any());
+        verify(redisRepository, never()).addToSortedSet(anyString(), anyString(), anyDouble(), any());
     }
 
     @Test
