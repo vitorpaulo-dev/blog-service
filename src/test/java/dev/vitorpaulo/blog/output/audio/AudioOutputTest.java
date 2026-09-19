@@ -11,6 +11,7 @@ import dev.vitorpaulo.blog.model.AudioType;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.PostStatus;
 import dev.vitorpaulo.blog.model.upload.SignedUrlModel;
+import dev.vitorpaulo.blog.output.mapper.AudioOutputMapperImpl;
 import dev.vitorpaulo.blog.output.upload.StorageOutput;
 import dev.vitorpaulo.blog.repository.AudioRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
@@ -63,7 +64,7 @@ class AudioOutputTest {
     @BeforeEach
     void setUp() {
         audioOutput = new AudioOutput(audioRepository, postRepository, storageOutput,
-            audioWorkerFeignClient, redisRepository, objectMapper);
+            audioWorkerFeignClient, redisRepository, objectMapper, new AudioOutputMapperImpl());
         postId = UUID.randomUUID();
     }
 

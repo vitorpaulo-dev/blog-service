@@ -13,6 +13,7 @@ import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.PostStatus;
 import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.model.audio.AudioProgressModel;
+import dev.vitorpaulo.blog.output.mapper.AudioOutputMapper;
 import dev.vitorpaulo.blog.output.upload.StorageOutput;
 import dev.vitorpaulo.blog.repository.AudioRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
@@ -49,6 +50,7 @@ public class AudioOutput {
     private final AudioWorkerFeignClient audioWorkerFeignClient;
     private final RedisRepository redisRepository;
     private final ObjectMapper objectMapper;
+    private final AudioOutputMapper audioOutputMapper;
 
     @Transactional(readOnly = true)
     public List<AudioModel> artifacts(UUID postId) {
@@ -72,7 +74,7 @@ public class AudioOutput {
         audioWorkerFeignClient.generate(new AudioJobRequest(
             postId,
             post.getSlug(),
-            jobContents(post),
+            audioOutputMapper.toJobContents(post.getContents()),
             Map.of(type, Map.of(language, url))
         ));
 
@@ -125,12 +127,7 @@ public class AudioOutput {
 
                     final var artifact = existing != null
                         ? existing
-                        : audioRepository.save(AudioEntity.builder()
-                            .postId(postId)
-                            .type(type)
-                            .language(language)
-                            .status(AudioStatus.QUEUED)
-                            .build());
+                        : audioRepository.save(audioOutputMapper.toEntity(postId, type, language));
 
                     uploads.computeIfAbsent(type, ignored -> new EnumMap<>(Language.class))
                         .put(language, renewArtifact(artifact, hash));
@@ -138,7 +135,12 @@ public class AudioOutput {
             }
 
             if (!uploads.isEmpty()) {
-                audioWorkerFeignClient.generate(new AudioJobRequest(postId, post.getSlug(), jobContents(post), uploads));
+                audioWorkerFeignClient.generate(new AudioJobRequest(
+                    postId,
+                    post.getSlug(),
+                    audioOutputMapper.toJobContents(post.getContents()),
+                    uploads
+                ));
             }
         } catch (Exception e) {
             log.error("Failed to dispatch audio job for post {}", postId, e);
@@ -169,12 +171,6 @@ public class AudioOutput {
         return uploaded.url();
     }
 
-    private List<AudioJobRequest.AudioJobContent> jobContents(PostEntity post) {
-        return post.getContents().stream()
-            .map(content -> new AudioJobRequest.AudioJobContent(content.getLanguage(), content.getTitle(), content.getContent()))
-            .toList();
-    }
-
     static String contentHash(String title, String content) {
         try {
             final var digest = MessageDigest.getInstance("SHA-256");
@@ -200,32 +196,8 @@ public class AudioOutput {
 
     private AudioModel toModel(AudioEntity artifact) {
         return progress(artifact)
-            .map(progress -> new AudioModel(
-                artifact.getType(),
-                artifact.getLanguage(),
-                parseStatus(progress.status()).orElse(artifact.getStatus()),
-                artifact.getR2Key(),
-                Optional.ofNullable(progress.error())
-                    .filter(error -> !error.isBlank())
-                    .orElse(artifact.getErrorMessage()),
-                progress.progress()
-            ))
-            .orElseGet(() -> new AudioModel(
-                artifact.getType(),
-                artifact.getLanguage(),
-                artifact.getStatus(),
-                artifact.getR2Key(),
-                artifact.getErrorMessage(),
-                null
-            ));
-    }
-
-    private Optional<AudioStatus> parseStatus(String value) {
-        try {
-            return Optional.of(AudioStatus.valueOf(value.toUpperCase()));
-        } catch (Exception e) {
-            return Optional.empty();
-        }
+            .map(progress -> audioOutputMapper.toModel(artifact, progress))
+            .orElseGet(() -> audioOutputMapper.toModel(artifact));
     }
 
     private Optional<AudioProgressModel> progress(AudioEntity artifact) {
