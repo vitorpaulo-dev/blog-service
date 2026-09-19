@@ -16,6 +16,6 @@ public class GetPostBySlugUseCase {
 
     public PostModel execute(String slug, Language language, String ip) {
         final var post = postOutput.findBySlugAndIncrementView(slug, language, ip);
-        return post.withAudio(audioOutput.artifactMap(post.id(), language));
+        return post.withAudio(audioOutput.artifactMap(post, language));
     }
 }

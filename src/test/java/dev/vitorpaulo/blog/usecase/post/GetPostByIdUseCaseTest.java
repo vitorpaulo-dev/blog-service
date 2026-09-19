@@ -32,12 +32,12 @@ class GetPostByIdUseCaseTest {
         var id = UUID.randomUUID();
         when(postOutput.findById(id)).thenReturn(expected);
         doReturn(expected).when(expected).withAudio(any());
-        when(audioOutput.artifactMap(id)).thenReturn(Map.of());
+        when(audioOutput.artifactMap(expected)).thenReturn(Map.of());
 
         var result = getPostByIdUseCase.execute(id);
 
         assertEquals(expected, result);
-        verify(audioOutput).artifactMap(id);
+        verify(audioOutput).artifactMap(expected);
     }
 
     @Test

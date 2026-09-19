@@ -11,6 +11,7 @@ import dev.vitorpaulo.blog.model.AudioStatus;
 import dev.vitorpaulo.blog.model.AudioType;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.PostStatus;
+import dev.vitorpaulo.blog.model.PostModel;
 import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.model.audio.AudioProgressModel;
 import dev.vitorpaulo.blog.output.mapper.AudioOutputMapper;
@@ -82,10 +83,22 @@ public class AudioOutput {
     }
 
     @Transactional(readOnly = true)
-    public Map<AudioType, Map<Language, AudioModel>> artifactMap(UUID postId, Language language) {
+    public Map<AudioType, Map<Language, AudioModel>> artifactMap(PostModel post) {
+        final var full = new EnumMap<AudioType, Map<Language, AudioModel>>(AudioType.class);
+
+        for (var model : artifacts(post.id())) {
+            final var byLanguage = full.computeIfAbsent(model.type(), type -> new EnumMap<>(Language.class));
+            byLanguage.put(model.language(), model);
+        }
+
+        return full;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<AudioType, Map<Language, AudioModel>> artifactMap(PostModel post, Language language) {
         final var filtered = new EnumMap<AudioType, Map<Language, AudioModel>>(AudioType.class);
 
-        for (var model : artifacts(postId)) {
+        for (var model : artifacts(post.id())) {
             if (model.language() == language) {
                 filtered.put(model.type(), new EnumMap<>(Map.of(language, model)));
             }
@@ -94,26 +107,14 @@ public class AudioOutput {
         return filtered;
     }
 
-    @Transactional(readOnly = true)
-    public Map<AudioType, Map<Language, AudioModel>> artifactMap(UUID postId) {
-        final var full = new EnumMap<AudioType, Map<Language, AudioModel>>(AudioType.class);
-
-        for (var model : artifacts(postId)) {
-            final var byLanguage = full.computeIfAbsent(model.type(), type -> new EnumMap<>(Language.class));
-            byLanguage.put(model.language(), model);
-        }
-
-        return full;
-    }
-
     @Transactional
-    public void dispatchPost(UUID postId) {
+    public void dispatch(PostEntity post) {
         try {
-            final var post = postEntity(postId);
             if (post.getStatus() != PostStatus.PUBLISHED) {
                 return;
             }
 
+            final var postId = post.getId();
             final var uploads = new EnumMap<AudioType, Map<Language, String>>(AudioType.class);
             for (var type : AudioType.values()) {
                 for (var language : Language.values()) {
@@ -143,7 +144,7 @@ public class AudioOutput {
                 ));
             }
         } catch (Exception e) {
-            log.error("Failed to dispatch audio job for post {}", postId, e);
+            log.error("Failed to dispatch audio job for post {}", post.getId(), e);
         }
     }
 

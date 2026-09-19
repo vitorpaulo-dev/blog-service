@@ -6,6 +6,7 @@ import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.common.util.PostUtils;
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
+import dev.vitorpaulo.blog.output.audio.AudioOutput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
@@ -37,7 +38,8 @@ public class PostOutput {
 	private final ProjectRepository projectRepository;
 	private final TagRepository tagRepository;
 	private final AuthorRepository authorRepository;
-	private final RedisRepository redisRepository;
+    private final RedisRepository redisRepository;
+    private final AudioOutput audioOutput;
 
 	private static final String KEY_PREFIX = "post:";
 	private static final String VIEWS_KEY_SUFFIX = ":views";
@@ -148,6 +150,7 @@ public class PostOutput {
         if (projectIds != null) entity.setProjects(projectRepository.findAllById(projectIds));
 
         final var saved = postRepository.save(entity);
+        audioOutput.dispatch(saved);
         return postOutputMapper.toModel(saved, projectIds, tagIds);
     }
 
@@ -174,6 +177,7 @@ public class PostOutput {
         entity.setProjects(projectRepository.findAllById(Objects.requireNonNullElse(projectIds, Collections.emptyList())));
 
         final var saved = postRepository.save(entity);
+        audioOutput.dispatch(saved);
         return postOutputMapper.toModel(saved, projectIds, tagIds);
     }
 

@@ -10,7 +10,9 @@ import dev.vitorpaulo.blog.model.AudioStatus;
 import dev.vitorpaulo.blog.model.AudioType;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.PostStatus;
+import dev.vitorpaulo.blog.model.PostModel;
 import dev.vitorpaulo.blog.model.upload.SignedUrlModel;
+import dev.vitorpaulo.blog.output.mapper.AudioOutputMapper;
 import dev.vitorpaulo.blog.output.mapper.AudioOutputMapperImpl;
 import dev.vitorpaulo.blog.output.upload.StorageOutput;
 import dev.vitorpaulo.blog.repository.AudioRepository;
@@ -61,21 +63,30 @@ class AudioOutputTest {
 
     private UUID postId;
 
+    private PostModel postModel;
+
     @BeforeEach
     void setUp() {
         audioOutput = new AudioOutput(audioRepository, postRepository, storageOutput,
             audioWorkerFeignClient, redisRepository, objectMapper, new AudioOutputMapperImpl());
         postId = UUID.randomUUID();
+        postModel = mockPostModel(postId);
+        when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
+    }
+
+    private PostModel mockPostModel(UUID id) {
+        var model = org.mockito.Mockito.mock(PostModel.class);
+        org.mockito.Mockito.when(model.id()).thenReturn(id);
+        return model;
     }
 
     @Test
-    void dispatchPost_publishedPost_savesFourQueuedArtifactsAndSendsJob() {
-        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(publishedPost()));
+    void dispatch_publishedPost_savesFourQueuedArtifactsAndSendsJob() {
         when(audioRepository.findByPostIdAndTypeAndLanguage(eq(postId), any(), any())).thenReturn(Optional.empty());
         stubArtifactSave();
         stubPresign();
 
-        audioOutput.dispatchPost(postId);
+        audioOutput.dispatch(publishedPost());
 
         verify(audioRepository, never()).delete(any(AudioEntity.class));
         verify(storageOutput, never()).delete(anyString());
@@ -108,16 +119,16 @@ class AudioOutputTest {
     }
 
     @Test
-    void dispatchPost_existingArtifacts_deletesOldR2ObjectsAndRedispatches() {
+    void dispatch_existingArtifacts_deletesOldR2ObjectsAndRedispatches() {
         var oldKey = "post/audio/" + postId + "/old-narration.wav";
-        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(publishedPost()));
         when(audioRepository.findByPostIdAndTypeAndLanguage(eq(postId), any(), any()))
             .thenAnswer(invocation -> Optional.of(artifact(
                 invocation.getArgument(1), invocation.getArgument(2), oldKey, AudioStatus.READY)));
         stubArtifactSave();
         stubPresign();
 
-        audioOutput.dispatchPost(postId);
+        audioOutput.dispatch(publishedPost());
+        verifyNoInteractions(postRepository);
 
         verify(storageOutput, times(4)).delete(oldKey);
         var saved = ArgumentCaptor.forClass(AudioEntity.class);
@@ -127,8 +138,7 @@ class AudioOutputTest {
     }
 
     @Test
-    void dispatchPost_unchangedContentHash_skipsArtifactsEntirely() {
-        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(publishedPost()));
+    void dispatch_unchangedContentHash_skipsArtifactsEntirely() {
         when(audioRepository.findByPostIdAndTypeAndLanguage(eq(postId), any(), any()))
             .thenAnswer(invocation -> {
                 var type = (AudioType) invocation.getArgument(1);
@@ -138,15 +148,14 @@ class AudioOutputTest {
                 return Optional.of(stored);
             });
 
-        audioOutput.dispatchPost(postId);
+        audioOutput.dispatch(publishedPost());
 
         verifyNoInteractions(audioWorkerFeignClient, storageOutput);
         verify(audioRepository, never()).save(any(AudioEntity.class));
     }
 
     @Test
-    void dispatchPost_singleArtifactContentChanged_redispatchesOnlyThatArtifact() {
-        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(publishedPost()));
+    void dispatch_singleArtifactContentChanged_redispatchesOnlyThatArtifact() {
         when(audioRepository.findByPostIdAndTypeAndLanguage(eq(postId), any(), any()))
             .thenAnswer(invocation -> {
                 var type = (AudioType) invocation.getArgument(1);
@@ -161,7 +170,7 @@ class AudioOutputTest {
         stubArtifactSave();
         stubPresign();
 
-        audioOutput.dispatchPost(postId);
+        audioOutput.dispatch(publishedPost());
 
         var job = ArgumentCaptor.forClass(AudioJobRequest.class);
         verify(audioWorkerFeignClient).generate(job.capture());
@@ -179,8 +188,7 @@ class AudioOutputTest {
     }
 
     @Test
-    void dispatchPost_allUnchanged_sendsNoWorkerJob() {
-        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(publishedPost()));
+    void dispatch_allUnchanged_sendsNoWorkerJob() {
         when(audioRepository.findByPostIdAndTypeAndLanguage(eq(postId), any(), any()))
             .thenAnswer(invocation -> {
                 var type = (AudioType) invocation.getArgument(1);
@@ -190,29 +198,27 @@ class AudioOutputTest {
                 return Optional.of(stored);
             });
 
-        audioOutput.dispatchPost(postId);
+        audioOutput.dispatch(publishedPost());
 
         verify(audioWorkerFeignClient, never()).generate(any(AudioJobRequest.class));
     }
 
     @Test
-    void dispatchPost_draftPost_doesNothing() {
-        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(post(PostStatus.DRAFT)));
+    void dispatch_draftPost_doesNothing() {
 
-        audioOutput.dispatchPost(postId);
+        audioOutput.dispatch(post(PostStatus.DRAFT));
 
-        verifyNoInteractions(audioWorkerFeignClient, storageOutput, audioRepository);
+        verifyNoInteractions(audioWorkerFeignClient, storageOutput, audioRepository, postRepository);
     }
 
     @Test
-    void dispatchPost_workerFails_doesNotPropagate() {
-        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(publishedPost()));
+    void dispatch_workerFails_doesNotPropagate() {
         stubArtifactSave();
         stubPresign();
         org.mockito.Mockito.doThrow(new RuntimeException("worker down"))
             .when(audioWorkerFeignClient).generate(any());
 
-        audioOutput.dispatchPost(postId);
+        audioOutput.dispatch(publishedPost());
 
         verify(audioWorkerFeignClient).generate(any());
     }
@@ -264,7 +270,8 @@ class AudioOutputTest {
         when(audioRepository.findByPostId(postId)).thenReturn(List.of(narrationEn, narrationPt, podcastEn));
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
 
-        var full = audioOutput.artifactMap(postId);
+        var full = audioOutput.artifactMap(postModel);
+        verifyNoInteractions(postRepository);
 
         assertEquals(2, full.get(AudioType.NARRATION).size());
         assertEquals(AudioStatus.READY, full.get(AudioType.NARRATION).get(Language.ENGLISH).status());
@@ -280,7 +287,7 @@ class AudioOutputTest {
         when(audioRepository.findByPostId(postId)).thenReturn(List.of(narrationEn, narrationPt));
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
 
-        var filtered = audioOutput.artifactMap(postId, Language.PORTUGUESE);
+        var filtered = audioOutput.artifactMap(postModel, Language.PORTUGUESE);
 
         assertNull(filtered.get(AudioType.NARRATION).get(Language.ENGLISH));
         assertEquals(AudioStatus.GENERATING, filtered.get(AudioType.NARRATION).get(Language.PORTUGUESE).status());
@@ -291,13 +298,13 @@ class AudioOutputTest {
         when(audioRepository.findByPostId(postId)).thenReturn(List.of());
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
 
-        assertTrue(audioOutput.artifactMap(postId).isEmpty());
+        assertTrue(audioOutput.artifactMap(postModel).isEmpty());
     }
 
     @Test
     void retry_generatingArtifact_conflicts() {
-        var artifact = artifact(AudioType.NARRATION, Language.ENGLISH, "post/audio/1/narration.wav", AudioStatus.GENERATING);
         when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(publishedPost()));
+        var artifact = artifact(AudioType.NARRATION, Language.ENGLISH, "post/audio/1/narration.wav", AudioStatus.GENERATING);
         when(audioRepository.findByPostIdAndTypeAndLanguage(postId, AudioType.NARRATION, Language.ENGLISH))
             .thenReturn(Optional.of(artifact));
 

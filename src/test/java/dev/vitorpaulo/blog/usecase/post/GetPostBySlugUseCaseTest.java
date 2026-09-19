@@ -12,7 +12,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Map;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,16 +29,14 @@ class GetPostBySlugUseCaseTest {
 
     @Test
     void execute_validSlug_returnsPostWithUserLanguageAudio() {
-        var postId = UUID.randomUUID();
         when(postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "203.0.113.7")).thenReturn(expected);
-        when(expected.id()).thenReturn(postId);
         doReturn(expected).when(expected).withAudio(any());
-        when(audioOutput.artifactMap(postId, Language.ENGLISH)).thenReturn(Map.of());
+        when(audioOutput.artifactMap(expected, Language.ENGLISH)).thenReturn(Map.of());
 
         var result = getPostBySlugUseCase.execute("my-post", Language.ENGLISH, "203.0.113.7");
 
         assertEquals(expected, result);
-        verify(audioOutput).artifactMap(postId, Language.ENGLISH);
+        verify(audioOutput).artifactMap(expected, Language.ENGLISH);
     }
 
     @Test

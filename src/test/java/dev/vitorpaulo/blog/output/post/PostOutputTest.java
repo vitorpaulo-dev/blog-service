@@ -8,6 +8,7 @@ import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
+import dev.vitorpaulo.blog.output.audio.AudioOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -46,6 +48,7 @@ class PostOutputTest {
     @Mock private TagRepository tagRepository;
     @Mock private AuthorRepository authorRepository;
     @Mock private RedisRepository redisRepository;
+    @Mock private AudioOutput audioOutput;
     @Mock private PostModel post;
     @Mock private PostModel expectedResult;
     @Mock private PostModel secondResult;
@@ -234,6 +237,9 @@ class PostOutputTest {
 
         postOutput.save(post, null, null, author);
 
+        var saved = ArgumentCaptor.forClass(PostEntity.class);
+        verify(audioOutput).dispatch(saved.capture());
+        assertEquals(1, saved.getValue().getContents().size());
         verify(newContent).setLanguage(Language.ENGLISH);
         verify(postRepository).save(any(PostEntity.class));
     }
@@ -321,6 +327,7 @@ class PostOutputTest {
         verify(postEntity, never()).setSlug(anyString());
         verify(postRepository, never()).countBySlugAndIdNot(anyString(), any());
         verify(existingContent).setContent("New Content");
+        verify(audioOutput).dispatch(postEntity);
     }
 
     @Test

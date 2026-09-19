@@ -1,7 +1,6 @@
 package dev.vitorpaulo.blog.usecase.post;
 
 import dev.vitorpaulo.blog.model.*;
-import dev.vitorpaulo.blog.output.audio.AudioOutput;
 import dev.vitorpaulo.blog.output.post.PostOutput;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,7 +19,6 @@ import static org.mockito.Mockito.*;
 class UpdatePostUseCaseTest {
 
     @Mock private PostOutput postOutput;
-    @Mock private AudioOutput audioOutput;
     @Mock private PostModel post;
     @Mock private AuthorModel author;
     @Mock private PostModel updatedPost;
@@ -40,24 +38,20 @@ class UpdatePostUseCaseTest {
     @Test
     void execute_withTagsAndProjects_returnsUpdatedPost() {
         when(postOutput.update(post, List.of(tagId), List.of(projectId), author)).thenReturn(updatedPost);
-        when(updatedPost.id()).thenReturn(UUID.randomUUID());
-        when(updatedPost.id()).thenReturn(UUID.randomUUID());
 
         var result = updatePostUseCase.execute(post, List.of(tagId), List.of(projectId), author);
 
         assertEquals(updatedPost, result);
         verify(postOutput).update(post, List.of(tagId), List.of(projectId), author);
-        verify(audioOutput).dispatchPost(updatedPost.id());
     }
 
     @Test
     void execute_withoutTagsOrProjects_returnsUpdatedPost() {
         when(postOutput.update(post, null, null, author)).thenReturn(updatedPost);
-        when(updatedPost.id()).thenReturn(UUID.randomUUID());
 
         var result = updatePostUseCase.execute(post, null, null, author);
 
         assertEquals(updatedPost, result);
-        verify(audioOutput).dispatchPost(updatedPost.id());
+        verify(postOutput).update(post, null, null, author);
     }
 }

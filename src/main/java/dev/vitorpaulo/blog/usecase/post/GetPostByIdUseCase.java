@@ -17,6 +17,6 @@ public class GetPostByIdUseCase {
 
     public PostModel execute(UUID id) {
         final var post = postOutput.findById(id);
-        return post.withAudio(audioOutput.artifactMap(id));
+        return post.withAudio(audioOutput.artifactMap(post));
     }
 }
