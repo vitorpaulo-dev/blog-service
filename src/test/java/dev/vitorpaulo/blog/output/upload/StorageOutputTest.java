@@ -44,7 +44,7 @@ class StorageOutputTest {
 		assertEquals("https://r2.example/signed-put", result.url());
 		verify(uploader).presignPutObject(argThat((PutObjectPresignRequest request) -> {
 			assertEquals("test-bucket", request.putObjectRequest().bucket());
-			assertEquals(Duration.ofMinutes(5), request.signatureDuration());
+			assertEquals(Duration.ofMinutes(15), request.signatureDuration());
 			return true;
 		}));
 	}
