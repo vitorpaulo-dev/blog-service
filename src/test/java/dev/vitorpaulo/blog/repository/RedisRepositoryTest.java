@@ -7,11 +7,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.ZSetOperations;
 
 import java.time.Duration;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -19,6 +22,7 @@ class RedisRepositoryTest {
 
     @Mock private StringRedisTemplate stringRedisTemplate;
     @Mock private ZSetOperations<String, String> zSetOperations;
+    @Mock private ValueOperations<String, String> valueOperations;
 
     @InjectMocks
     private RedisRepository redisRepository;
@@ -43,6 +47,27 @@ class RedisRepositoryTest {
         var result = redisRepository.countInRange("post:abc:views", 0.0, 86400000.0);
 
         assertEquals(3L, result);
+    }
+
+    @Test
+    void getValue_returnsStoredValue() {
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("post:abc")).thenReturn("payload");
+
+        var result = redisRepository.getValue("post:abc");
+
+        assertTrue(result.isPresent());
+        assertEquals("payload", result.get());
+    }
+
+    @Test
+    void getValue_missingKey_returnsEmpty() {
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("post:abc")).thenReturn(null);
+
+        var result = redisRepository.getValue("post:abc");
+
+        assertTrue(result.isEmpty());
     }
 
     @Test

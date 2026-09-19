@@ -4,6 +4,8 @@ import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.model.upload.SignedUrlModel;
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
@@ -102,9 +104,35 @@ class StorageOutputTest {
 		assertEquals(1, output.signKeys(List.of("post/banner/a.png")).size());
 	}
 
+	@Test
+	void delete_removesObjectFromBucket() throws Exception {
+		final var deleter = mock(S3Client.class);
+
+		final var output = output(Optional.of(presigner), Optional.of(uploader), Optional.of(deleter));
+		output.delete("post/audio/abc/podcast.wav");
+
+		verify(deleter).deleteObject(argThat((DeleteObjectRequest request) ->
+			"test-bucket".equals(request.bucket()) && "post/audio/abc/podcast.wav".equals(request.key())));
+	}
+
+	@Test
+	void missingDeleter_throwsUploadFailed() throws Exception {
+		final var output = output(Optional.of(presigner), Optional.of(uploader), Optional.empty());
+
+		final var exception = assertThrows(BusinessException.class, () -> output.delete("post/audio/abc/podcast.wav"));
+
+		assertEquals(ExceptionCode.UPLOAD_FAILED, exception.getCode());
+	}
+
 	private StorageOutput output(Optional<S3Presigner> readPresigner, Optional<S3Presigner> uploadPresigner)
 		throws NoSuchFieldException, IllegalAccessException {
-		final var output = new StorageOutput(readPresigner, uploadPresigner);
+		return output(readPresigner, uploadPresigner, Optional.empty());
+	}
+
+	private StorageOutput output(Optional<S3Presigner> readPresigner, Optional<S3Presigner> uploadPresigner,
+		Optional<S3Client> deleter)
+		throws NoSuchFieldException, IllegalAccessException {
+		final var output = new StorageOutput(readPresigner, uploadPresigner, deleter);
 		final var bucketField = StorageOutput.class.getDeclaredField("bucket");
 		bucketField.setAccessible(true);
 		bucketField.set(output, "test-bucket");

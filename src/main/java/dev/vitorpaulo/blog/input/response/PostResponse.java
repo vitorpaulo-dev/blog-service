@@ -1,5 +1,6 @@
 package dev.vitorpaulo.blog.input.response;
 
+import dev.vitorpaulo.blog.model.AudioType;
 import dev.vitorpaulo.blog.model.Language;
 
 import java.time.OffsetDateTime;
@@ -25,5 +26,6 @@ public record PostResponse(
         Long helpCount,
         Long reactionCount,
         Integer weight,
-        Map<Language, PostContentResponse> translations
+        Map<Language, PostContentResponse> translations,
+        Map<AudioType, Map<Language, AudioArtifactResponse>> audio
 ) {}

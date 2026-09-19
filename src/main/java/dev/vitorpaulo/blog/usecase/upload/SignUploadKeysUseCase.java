@@ -19,7 +19,6 @@ public class SignUploadKeysUseCase {
 			.filter(UploadFolder::isAllowedKey)
 			.distinct()
 			.toList();
-
 		if (allowedKeys.isEmpty()) {
 			return List.of();
 		}

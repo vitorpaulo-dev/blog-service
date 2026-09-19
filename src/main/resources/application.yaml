@@ -75,3 +75,7 @@ r2:
   access-key-id: ${R2_ACCESS_KEY_ID:}
   secret-access-key: ${R2_SECRET_ACCESS_KEY:}
   bucket: ${R2_BUCKET:vitorpaulo-dev}
+
+audio:
+  worker:
+    url: ${AUDIO_WORKER_URL:http://localhost:3966}

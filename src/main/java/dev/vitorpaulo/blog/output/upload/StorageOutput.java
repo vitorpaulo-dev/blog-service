@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -22,11 +24,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class StorageOutput {
 
-	private static final Duration PUT_EXPIRY = Duration.ofMinutes(5);
+	private static final Duration PUT_EXPIRY = Duration.ofMinutes(15);
 	private static final Duration GET_EXPIRY = Duration.ofHours(1);
 
 	private final Optional<S3Presigner> s3Presigner;
 	private final Optional<S3Presigner> s3Uploader;
+	private final Optional<S3Client> s3Deleter;
 
 	@Value("${r2.bucket:}")
 	private String bucket;
@@ -54,6 +57,12 @@ public class StorageOutput {
 			.build();
 
 		return new SignedUrlModel(key, presigner().presignGetObject(presignRequest).url().toString());
+	}
+
+	public void delete(String key) {
+		s3Deleter.orElseThrow(() ->
+			new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, ExceptionCode.UPLOAD_FAILED, null))
+			.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
 	}
 
 	private S3Presigner presigner() {

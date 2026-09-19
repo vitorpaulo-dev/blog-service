@@ -5,6 +5,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -20,6 +21,10 @@ public class RedisRepository {
 
 	public void set(String key, Duration ttl) {
 		stringRedisTemplate.opsForValue().set(key, DEFAULT_VALUE, ttl);
+	}
+
+	public Optional<String> getValue(String key) {
+		return Optional.ofNullable(stringRedisTemplate.opsForValue().get(key));
 	}
 
 	public void addToSortedSet(String key, String member, double score, Duration ttl) {

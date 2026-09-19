@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 public interface PostOutputMapper {
 
 	@Mapping(target = "translations", expression = "java(contentsToTranslations(entity.getContents()))")
+	@Mapping(target = "audio", ignore = true)
 	PostModel toModel(PostEntity entity, List<UUID> projectIds, List<UUID> tagIds);
 
 	ReactionModel toReactionModel(PostEntity entity);

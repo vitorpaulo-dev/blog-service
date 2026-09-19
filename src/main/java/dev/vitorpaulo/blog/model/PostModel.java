@@ -1,5 +1,7 @@
 package dev.vitorpaulo.blog.model;
 
+import dev.vitorpaulo.blog.model.audio.AudioModel;
+
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -23,5 +25,14 @@ public record PostModel(
         Long helpCount,
         Long reactionCount,
         Integer weight,
-        Map<Language, PostContentModel> translations
-) {}
+        Map<Language, PostContentModel> translations,
+        Map<AudioType, Map<Language, AudioModel>> audio
+) {
+    public PostModel withAudio(Map<AudioType, Map<Language, AudioModel>> audio) {
+        return new PostModel(
+            id, slug, bannerUrl, status, estimatedReading, createdAt, updatedAt,
+            authors, tagIds, projectIds, viewCount, loveCount, celebrateCount,
+            geniusCount, helpCount, reactionCount, weight, translations, audio
+        );
+    }
+}
