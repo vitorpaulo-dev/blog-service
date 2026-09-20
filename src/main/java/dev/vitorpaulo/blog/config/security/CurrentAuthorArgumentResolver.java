@@ -9,6 +9,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
@@ -32,6 +33,11 @@ public class CurrentAuthorArgumentResolver implements HandlerMethodArgumentResol
         final var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
             return null;
+        }
+
+        if (webRequest.getAttribute(AuthorRoleFilter.AUTHOR_REQUEST_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST)
+                instanceof AuthorModel cachedAuthor) {
+            return cachedAuthor;
         }
 
         return findOrCreateAuthorUseCase.execute(jwt);

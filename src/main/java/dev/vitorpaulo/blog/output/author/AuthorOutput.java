@@ -4,14 +4,18 @@ import com.clerk.backend_api.Clerk;
 import com.clerk.backend_api.models.operations.ListOrganizationMembershipsRequest;
 import dev.vitorpaulo.blog.common.exception.InternalException;
 import dev.vitorpaulo.blog.common.util.PostUtils;
+import dev.vitorpaulo.blog.config.security.AuthorRoleMapper;
 import dev.vitorpaulo.blog.output.mapper.AuthorOutputMapper;
 import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AuthorOutput {
@@ -44,19 +48,44 @@ public class AuthorOutput {
 
         authorRepository.save(author);
 
-        final var organization = clerk.organizationMemberships()
-            .list(ListOrganizationMembershipsRequest.builder()
-                .userId(java.util.List.of(user.id()))
-                .organizationId(organizationId)
-                .build())
-            .organizationMemberships()
-            .orElseThrow(InternalException::new)
-            .data()
-            .stream()
-            .findFirst()
-            .orElseThrow(InternalException::new);
+        final var role = resolveRole(principal, user.id());
 
-        return authorOutputMapper.toModel(author, organization.role());
+        return authorOutputMapper.toModel(author, role);
+    }
+
+    private String resolveRole(Jwt principal, String clerkUserId) {
+        var resolvedRole = resolveMembershipRole(clerkUserId);
+        if (StringUtils.isNotBlank(resolvedRole)) {
+            return resolvedRole;
+        }
+        return fallbackRole(principal);
+    }
+
+    private String resolveMembershipRole(String clerkUserId) {
+        try {
+            return clerk.organizationMemberships()
+                .list(ListOrganizationMembershipsRequest.builder()
+                    .userId(java.util.List.of(clerkUserId))
+                    .organizationId(organizationId)
+                    .build())
+                .organizationMemberships()
+                .orElseThrow(InternalException::new)
+                .data()
+                .stream()
+                .findFirst()
+                .map(membership -> membership.role())
+                .orElse(null);
+        } catch (Exception e) {
+            log.warn("Clerk membership lookup failed for user {}", clerkUserId, e);
+            return null;
+        }
+    }
+
+    private String fallbackRole(Jwt principal) {
+        if (principal.getClaim("org_role") instanceof String role && StringUtils.isNotBlank(role)) {
+            return role;
+        }
+        return AuthorRoleMapper.MEMBER_CLERK_ROLE;
     }
 
     private String generateUniqueSlug(String name, java.util.UUID currentId) {

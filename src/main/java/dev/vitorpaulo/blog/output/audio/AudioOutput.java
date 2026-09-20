@@ -5,10 +5,12 @@ import dev.vitorpaulo.blog.client.audio.AudioWorkerFeignClient;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
+import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.AudioEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.model.AudioStatus;
 import dev.vitorpaulo.blog.model.AudioType;
+import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.PostStatus;
 import dev.vitorpaulo.blog.model.audio.AudioModel;
@@ -51,6 +53,7 @@ public class AudioOutput {
 	private final RedisRepository redisRepository;
 	private final ObjectMapper objectMapper;
 	private final AudioOutputMapper audioOutputMapper;
+	private final AuthorRoleChecker authorRoleChecker;
 
 	@Transactional(readOnly = true)
 	public List<AudioModel> artifacts(UUID postId) {
@@ -60,8 +63,10 @@ public class AudioOutput {
 	}
 
 	@Transactional
-	public AudioModel retry(UUID postId, AudioType type, Language language) {
+	public AudioModel retry(UUID postId, AudioType type, Language language, AuthorModel requester) {
 		final var post = findPost(postId);
+		authorize(requester, post);
+
 		final var artifact = audioRepository.findByPostIdAndTypeAndLanguage(postId, type, language)
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.AUDIO_NOT_FOUND));
 
@@ -192,6 +197,18 @@ public class AudioOutput {
 			.findFirst()
 			.map(content -> contentHash(content.getTitle(), content.getContent()))
 			.orElseThrow(() -> new IllegalStateException("Missing audio content for language " + language));
+	}
+
+	private void authorize(AuthorModel requester, PostEntity post) {
+		if (authorRoleChecker.isAdmin()) {
+			return;
+		}
+		final var requesterId = requester == null ? null : requester.id();
+		final boolean owner = requesterId != null && post.getAuthors() != null
+			&& post.getAuthors().stream().anyMatch(author -> requesterId.equals(author.getId()));
+		if (!owner) {
+			throw new BusinessException(HttpStatus.FORBIDDEN, ExceptionCode.FORBIDDEN, null);
+		}
 	}
 
 	private PostEntity findPost(UUID postId) {
