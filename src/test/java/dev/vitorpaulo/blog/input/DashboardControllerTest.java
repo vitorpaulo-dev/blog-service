@@ -1,7 +1,5 @@
 package dev.vitorpaulo.blog.input;
 
-import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
-import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.input.mapper.DashboardInputMapper;
 import dev.vitorpaulo.blog.input.response.DashboardStatsResponse;
 import dev.vitorpaulo.blog.input.response.TopPostsResponse;
@@ -13,7 +11,6 @@ import dev.vitorpaulo.blog.model.TopProjectsModel;
 import dev.vitorpaulo.blog.usecase.dashboard.GetDashboardStatsUseCase;
 import dev.vitorpaulo.blog.usecase.dashboard.GetTopPostsUseCase;
 import dev.vitorpaulo.blog.usecase.dashboard.GetTopProjectsUseCase;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -41,11 +38,6 @@ class DashboardControllerTest {
 	@InjectMocks
 	private DashboardController dashboardController;
 
-	@BeforeEach
-	void setUp() {
-		lenient().when(author.role()).thenReturn("org:admin");
-	}
-
 	@Test
 	void stats_admin_returnsMappedResponse() {
 		when(getDashboardStatsUseCase.execute()).thenReturn(statsModel);
@@ -57,13 +49,13 @@ class DashboardControllerTest {
 	}
 
 	@Test
-	void stats_nonAdmin_throwsForbidden() {
-		when(author.role()).thenReturn("org:member");
+	void stats_member_returnsMappedResponse() {
+		when(getDashboardStatsUseCase.execute()).thenReturn(statsModel);
+		when(dashboardInputMapper.toResponse(statsModel)).thenReturn(statsResponse);
 
-		var ex = assertThrows(BusinessException.class, () -> dashboardController.stats(author));
+		var result = dashboardController.stats(author);
 
-		assertEquals(ExceptionCode.FORBIDDEN, ex.getCode());
-		verifyNoInteractions(getDashboardStatsUseCase, dashboardInputMapper);
+		assertEquals(statsResponse, result);
 	}
 
 	@Test
@@ -77,13 +69,13 @@ class DashboardControllerTest {
 	}
 
 	@Test
-	void topPosts_nonAdmin_throwsForbidden() {
-		when(author.role()).thenReturn("org:member");
+	void topPosts_member_returnsMappedResponse() {
+		when(getTopPostsUseCase.execute(5)).thenReturn(topPostsModel);
+		when(dashboardInputMapper.toResponse(topPostsModel)).thenReturn(topPostsResponse);
 
-		var ex = assertThrows(BusinessException.class, () -> dashboardController.topPosts(author, 5));
+		var result = dashboardController.topPosts(author, 5);
 
-		assertEquals(ExceptionCode.FORBIDDEN, ex.getCode());
-		verifyNoInteractions(getTopPostsUseCase, dashboardInputMapper);
+		assertEquals(topPostsResponse, result);
 	}
 
 	@Test
@@ -97,12 +89,12 @@ class DashboardControllerTest {
 	}
 
 	@Test
-	void topProjects_nonAdmin_throwsForbidden() {
-		when(author.role()).thenReturn("org:member");
+	void topProjects_member_returnsMappedResponse() {
+		when(getTopProjectsUseCase.execute(5)).thenReturn(topProjectsModel);
+		when(dashboardInputMapper.toResponse(topProjectsModel)).thenReturn(topProjectsResponse);
 
-		var ex = assertThrows(BusinessException.class, () -> dashboardController.topProjects(author, 5));
+		var result = dashboardController.topProjects(author, 5);
 
-		assertEquals(ExceptionCode.FORBIDDEN, ex.getCode());
-		verifyNoInteractions(getTopProjectsUseCase, dashboardInputMapper);
+		assertEquals(topProjectsResponse, result);
 	}
 }

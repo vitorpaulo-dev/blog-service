@@ -23,6 +23,7 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
         SELECT DISTINCT p FROM PostEntity p
 		JOIN FETCH p.contents c
         WHERE p.slug = :slug
+		  AND p.status = 'PUBLISHED'
 		  AND c.id = COALESCE(
 			  (SELECT pc.id FROM PostContentEntity pc WHERE pc.post = p AND pc.language = :language),
 			  (SELECT pc2.id FROM PostContentEntity pc2 WHERE pc2.post = p ORDER BY pc2.language LIMIT 1)
@@ -30,7 +31,7 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
     """)
     Optional<PostEntity> findBySlugAndLanguage(String slug, Language language);
 
-    Optional<PostEntity> findBySlug(String slug);
+    Optional<PostEntity> findBySlugAndStatus(String slug, PostStatus status);
 
     long countBySlugAndIdNot(String slug, UUID id);
 
@@ -131,9 +132,8 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
 		String direction
 	);
 
-    @Modifying
     @Query("""
-        DELETE FROM PostEntity p
+        SELECT DISTINCT p FROM PostEntity p
         WHERE p.id IN :ids
           AND (
               :bypass = true
@@ -144,7 +144,7 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
               )
           )
     """)
-    void deleteByIdWithAuthor(List<UUID> ids, UUID author, Boolean bypass);
+    List<PostEntity> findAllByIdWithAuthor(List<UUID> ids, UUID author, Boolean bypass);
 
     @Query("""
         SELECT p FROM PostEntity p

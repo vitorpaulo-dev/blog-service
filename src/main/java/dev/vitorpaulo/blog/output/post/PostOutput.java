@@ -4,6 +4,7 @@ import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.common.util.PostUtils;
+import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.output.audio.AudioOutput;
@@ -27,8 +28,6 @@ import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static dev.vitorpaulo.blog.common.util.RoleUtils.isAdmin;
-
 @Component
 @RequiredArgsConstructor
 public class PostOutput {
@@ -40,6 +39,7 @@ public class PostOutput {
 	private final AuthorRepository authorRepository;
     private final RedisRepository redisRepository;
     private final AudioOutput audioOutput;
+    private final AuthorRoleChecker authorRoleChecker;
 
 	private static final String KEY_PREFIX = "post:";
 	private static final String VIEWS_KEY_SUFFIX = ":views";
@@ -61,7 +61,7 @@ public class PostOutput {
 
     @Transactional
     public ReactionModel react(String slug, ReactionType reactionType, String ip) {
-        final var entity = postRepository.findBySlug(slug)
+        final var entity = postRepository.findBySlugAndStatus(slug, PostStatus.PUBLISHED)
                 .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
 
         final var key = KEY_PREFIX + entity.getId() + ":reaction:" + ip + ":" + reactionType;
@@ -159,7 +159,7 @@ public class PostOutput {
     @Transactional
     public PostModel update(PostModel post, List<UUID> tagIds, List<UUID> projectIds, AuthorModel author) {
         validateTranslations(post.translations());
-        final var entity = postRepository.findByIdWithAuthor(post.id(), author.id(), isAdmin(author.role()))
+        final var entity = postRepository.findByIdWithAuthor(post.id(), author.id(), authorRoleChecker.isAdmin())
                 .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
 
         final var firstContent = getFirstContent(post.translations());
@@ -185,15 +185,15 @@ public class PostOutput {
 
     @Transactional
     public void deleteAll(List<UUID> ids, AuthorModel author) {
-        postRepository.deleteByIdWithAuthor(ids, author.id(), isAdmin(author.role()));
+        final var entities = postRepository.findAllByIdWithAuthor(ids, author.id(), authorRoleChecker.isAdmin());
+        if (entities.size() != Set.copyOf(ids).size()) {
+            throw new NotFoundException(ExceptionCode.POST_NOT_FOUND);
+        }
+        postRepository.deleteAll(entities);
     }
 
     @Transactional
     public void setFeaturedWeights(List<FeaturedPostModel> featured, AuthorModel author) {
-        if (!isAdmin(author.role())) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, ExceptionCode.FORBIDDEN, null);
-        }
-
         final var ids = featured.stream().map(FeaturedPostModel::postId).toList();
 
         if (!ids.isEmpty()) {
@@ -230,7 +230,7 @@ public class PostOutput {
                 pageableInput.query().authorId(),
                 pageableInput.query().tagId(),
                 language != null ? language.name() : null,
-                author != null,
+                showsDrafts(pageableInput.query().authorId(), author),
                 pageable,
                 pageableInput.sort(),
 				pageableInput.direction().name()
@@ -252,6 +252,16 @@ public class PostOutput {
             page.getTotalElements(),
             page.getTotalPages()
         );
+    }
+
+    private boolean showsDrafts(UUID filterAuthorId, AuthorModel author) {
+        if (authorRoleChecker.isAdmin()) {
+            return true;
+        }
+        return author != null
+            && author.id() != null
+            && filterAuthorId != null
+            && filterAuthorId.equals(author.id());
     }
 
     private void syncContents(PostEntity entity, Map<Language, PostContentModel> translations) {

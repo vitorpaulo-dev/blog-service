@@ -2,6 +2,7 @@ package dev.vitorpaulo.blog.usecase.audio;
 
 import dev.vitorpaulo.blog.model.AudioStatus;
 import dev.vitorpaulo.blog.model.AudioType;
+import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.output.audio.AudioOutput;
@@ -26,14 +27,15 @@ class RetryPostAudioUseCaseTest {
     private RetryPostAudioUseCase retryPostAudioUseCase;
 
     @Test
-    void execute_delegatesToOutput() {
+    void execute_delegatesToOutputWithRequester() {
         var postId = UUID.randomUUID();
+        var requester = new AuthorModel(null, "user_1", null, null, null, "org:member");
         var model = new AudioModel(AudioType.PODCAST, Language.PORTUGUESE, AudioStatus.QUEUED, "post/audio/1/k.wav", null, null);
-        when(audioOutput.retry(postId, AudioType.PODCAST, Language.PORTUGUESE)).thenReturn(model);
+        when(audioOutput.retry(postId, AudioType.PODCAST, Language.PORTUGUESE, requester)).thenReturn(model);
 
-        var result = retryPostAudioUseCase.execute(postId, AudioType.PODCAST, Language.PORTUGUESE);
+        var result = retryPostAudioUseCase.execute(postId, AudioType.PODCAST, Language.PORTUGUESE, requester);
 
         assertEquals(model, result);
-        verify(audioOutput).retry(postId, AudioType.PODCAST, Language.PORTUGUESE);
+        verify(audioOutput).retry(postId, AudioType.PODCAST, Language.PORTUGUESE, requester);
     }
 }

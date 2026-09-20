@@ -194,12 +194,12 @@ class PostControllerTest {
         var postId = UUID.randomUUID();
         var model = new AudioModel(AudioType.NARRATION, Language.ENGLISH, AudioStatus.QUEUED, "post/audio/1/k.wav", null, null);
         var response = new AudioResponse(AudioType.NARRATION, Language.ENGLISH, AudioStatus.QUEUED, "post/audio/1/k.wav", null, null);
-        when(retryPostAudioUseCase.execute(postId, AudioType.NARRATION, Language.ENGLISH)).thenReturn(model);
+        when(retryPostAudioUseCase.execute(postId, AudioType.NARRATION, Language.ENGLISH, author)).thenReturn(model);
         when(audioInputMapper.toResponse(model)).thenReturn(response);
 
-        var result = postController.retry(postId, AudioType.NARRATION, Language.ENGLISH);
+        var result = postController.retry(postId, AudioType.NARRATION, Language.ENGLISH, author);
 
         assertEquals(response, result);
-        verify(retryPostAudioUseCase).execute(postId, AudioType.NARRATION, Language.ENGLISH);
+        verify(retryPostAudioUseCase).execute(postId, AudioType.NARRATION, Language.ENGLISH, author);
     }
 }

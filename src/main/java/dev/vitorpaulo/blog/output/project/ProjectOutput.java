@@ -3,6 +3,7 @@ package dev.vitorpaulo.blog.output.project;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.common.util.PostUtils;
+import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.ProjectContentEntity;
 import dev.vitorpaulo.blog.domain.ProjectEntity;
 import dev.vitorpaulo.blog.output.mapper.ProjectOutputMapper;
@@ -23,8 +24,6 @@ import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static dev.vitorpaulo.blog.common.util.RoleUtils.isAdmin;
-
 @Component
 @RequiredArgsConstructor
 public class ProjectOutput {
@@ -34,6 +33,7 @@ public class ProjectOutput {
 	private final AuthorRepository authorRepository;
 	private final TagRepository tagRepository;
 	private final RedisRepository redisRepository;
+	private final AuthorRoleChecker authorRoleChecker;
 
 	private static final String KEY_PREFIX = "project:";
 	private static final String VIEWS_KEY_SUFFIX = ":views";
@@ -72,7 +72,7 @@ public class ProjectOutput {
 
 	@Transactional
 	public ReactionModel react(String slug, ReactionType reactionType, String ip) {
-		final var entity = projectRepository.findBySlug(slug)
+		final var entity = projectRepository.findBySlugAndStatus(slug, ProjectStatus.PUBLISHED)
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
 
 		final var key = KEY_PREFIX + entity.getId() + ":reaction:" + ip + ":" + reactionType;
@@ -125,7 +125,7 @@ public class ProjectOutput {
 
 	@Transactional
 	public ProjectModel update(ProjectModel project, List<UUID> tagIds, AuthorModel author) {
-		final var entity = projectRepository.findByIdWithAuthor(project.id(), author.id(), isAdmin(author.role()))
+		final var entity = projectRepository.findByIdWithAuthor(project.id(), author.id(), authorRoleChecker.isAdmin())
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
 
 		final var firstContent = getFirstContent(project.translations());
@@ -147,7 +147,11 @@ public class ProjectOutput {
 
 	@Transactional
 	public void deleteAll(List<UUID> ids, AuthorModel author) {
-		projectRepository.deleteByIdWithAuthor(ids, author.id(), isAdmin(author.role()));
+		final var entities = projectRepository.findAllByIdWithAuthor(ids, author.id(), authorRoleChecker.isAdmin());
+		if (entities.size() != Set.copyOf(ids).size()) {
+			throw new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND);
+		}
+		projectRepository.deleteAll(entities);
 	}
 
 	@Transactional(readOnly = true)
@@ -159,7 +163,7 @@ public class ProjectOutput {
 				pageableInput.query().authorId(),
 				pageableInput.query().tagId(),
 				language != null ? language.name() : null,
-				author != null,
+				showsDrafts(pageableInput.query().authorId(), author),
 				pageable,
 				mapSortProperty(pageableInput.sort(), pageableInput.direction())
 			);
@@ -193,6 +197,16 @@ public class ProjectOutput {
 				contents.keySet().removeIf(key -> key != language);
 			})
 			.toList();
+	}
+
+	private boolean showsDrafts(UUID filterAuthorId, AuthorModel author) {
+		if (authorRoleChecker.isAdmin()) {
+			return true;
+		}
+		return author != null
+			&& author.id() != null
+			&& filterAuthorId != null
+			&& filterAuthorId.equals(author.id());
 	}
 
 	private void syncContents(ProjectEntity entity, Map<Language, ProjectContentModel> translations) {
