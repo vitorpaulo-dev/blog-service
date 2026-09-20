@@ -13,10 +13,8 @@ import java.util.UUID;
 public class GetPostByIdUseCase {
 
     private final PostOutput postOutput;
-    private final AudioOutput audioOutput;
 
     public PostModel execute(UUID id) {
-        final var post = postOutput.findById(id);
-        return post.withAudio(audioOutput.artifactMap(post));
+        return postOutput.findById(id);
     }
 }

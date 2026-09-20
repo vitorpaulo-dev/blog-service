@@ -11,7 +11,6 @@ import dev.vitorpaulo.blog.model.AudioStatus;
 import dev.vitorpaulo.blog.model.AudioType;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.PostStatus;
-import dev.vitorpaulo.blog.model.PostModel;
 import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.model.audio.AudioProgressModel;
 import dev.vitorpaulo.blog.output.mapper.AudioOutputMapper;
@@ -42,177 +41,189 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AudioOutput {
 
-    private static final String AUDIO_FOLDER = "post/audio";
-    private static final String AUDIO_EXTENSION = ".wav";
+	private static final String AUDIO_FOLDER = "post/audio";
+	private static final String AUDIO_EXTENSION = ".wav";
 
-    private final AudioRepository audioRepository;
-    private final PostRepository postRepository;
-    private final StorageOutput storageOutput;
-    private final AudioWorkerFeignClient audioWorkerFeignClient;
-    private final RedisRepository redisRepository;
-    private final ObjectMapper objectMapper;
-    private final AudioOutputMapper audioOutputMapper;
+	private final AudioRepository audioRepository;
+	private final PostRepository postRepository;
+	private final StorageOutput storageOutput;
+	private final AudioWorkerFeignClient audioWorkerFeignClient;
+	private final RedisRepository redisRepository;
+	private final ObjectMapper objectMapper;
+	private final AudioOutputMapper audioOutputMapper;
 
-    @Transactional(readOnly = true)
-    public List<AudioModel> artifacts(UUID postId) {
-        return audioRepository.findByPostId(postId).stream()
-            .map(this::toModel)
-            .toList();
-    }
+	@Transactional(readOnly = true)
+	public List<AudioModel> artifacts(UUID postId) {
+		return audioRepository.findByPostId(postId).stream()
+			.map(this::toModel)
+			.toList();
+	}
 
-    @Transactional
-    public AudioModel retry(UUID postId, AudioType type, Language language) {
-        final var post = postEntity(postId);
-        final var artifact = audioRepository.findByPostIdAndTypeAndLanguage(postId, type, language)
-            .orElseThrow(() -> new NotFoundException(ExceptionCode.AUDIO_NOT_FOUND));
+	@Transactional
+	public AudioModel retry(UUID postId, AudioType type, Language language) {
+		final var post = findPost(postId);
+		final var artifact = audioRepository.findByPostIdAndTypeAndLanguage(postId, type, language)
+			.orElseThrow(() -> new NotFoundException(ExceptionCode.AUDIO_NOT_FOUND));
 
-        final var model = toModel(artifact);
-        if (model.status() == AudioStatus.GENERATING) {
-            throw new BusinessException(HttpStatus.CONFLICT, ExceptionCode.AUDIO_GENERATING, null);
-        }
+		if (toModel(artifact).status() == AudioStatus.GENERATING) {
+			throw new BusinessException(HttpStatus.CONFLICT, ExceptionCode.AUDIO_GENERATING, null);
+		}
 
-        final var url = renewArtifact(artifact, contentHash(post, language));
-        audioWorkerFeignClient.generate(new AudioJobRequest(
-            postId,
-            post.getSlug(),
-            audioOutputMapper.toJobContents(post.getContents()),
-            Map.of(type, Map.of(language, url))
-        ));
+		final var uploadUrl = renewArtifact(artifact, contentHashFor(post, language));
+		submitJob(post, Map.of(type, Map.of(language, uploadUrl)));
 
-        return toModel(artifact);
-    }
+		return toModel(artifact);
+	}
 
-    @Transactional(readOnly = true)
-    public Map<AudioType, Map<Language, AudioModel>> artifactMap(PostModel post) {
-        final var full = new EnumMap<AudioType, Map<Language, AudioModel>>(AudioType.class);
+	@Transactional(readOnly = true)
+	public Map<AudioType, Map<Language, AudioModel>> artifactMap(PostEntity post, Language language) {
+		final var result = new EnumMap<AudioType, Map<Language, AudioModel>>(AudioType.class);
 
-        for (var model : artifacts(post.id())) {
-            final var byLanguage = full.computeIfAbsent(model.type(), type -> new EnumMap<>(Language.class));
-            byLanguage.put(model.language(), model);
-        }
+		for (var model : artifacts(post.getId())) {
+			if (language != null && model.language() != language) {
+				continue;
+			}
 
-        return full;
-    }
+			result.computeIfAbsent(model.type(), type -> new EnumMap<>(Language.class))
+				.put(model.language(), model);
+		}
 
-    @Transactional(readOnly = true)
-    public Map<AudioType, Map<Language, AudioModel>> artifactMap(PostModel post, Language language) {
-        final var filtered = new EnumMap<AudioType, Map<Language, AudioModel>>(AudioType.class);
+		return result;
+	}
 
-        for (var model : artifacts(post.id())) {
-            if (model.language() == language) {
-                filtered.put(model.type(), new EnumMap<>(Map.of(language, model)));
-            }
-        }
+	@Transactional
+	public void dispatch(PostEntity post) {
+		if (post.getStatus() != PostStatus.PUBLISHED) {
+			return;
+		}
 
-        return filtered;
-    }
+		try {
+			final var uploads = renewChangedArtifacts(post);
+			if (!uploads.isEmpty()) {
+				submitJob(post, uploads);
+			}
+		} catch (Exception e) {
+			log.error("Failed to dispatch audio job for post {}", post.getId(), e);
+		}
+	}
 
-    @Transactional
-    public void dispatch(PostEntity post) {
-        try {
-            if (post.getStatus() != PostStatus.PUBLISHED) {
-                return;
-            }
+	static String contentHash(String title, String content) {
+		try {
+			final var digest = MessageDigest.getInstance("SHA-256");
+			final var bytes = digest.digest((title + "\n" + content).getBytes(StandardCharsets.UTF_8));
+			return HexFormat.of().formatHex(bytes);
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException("SHA-256 algorithm unavailable", e);
+		}
+	}
 
-            final var postId = post.getId();
-            final var uploads = new EnumMap<AudioType, Map<Language, String>>(AudioType.class);
-            for (var type : AudioType.values()) {
-                for (var language : Language.values()) {
-                    final var hash = contentHash(post, language);
-                    final var existing = audioRepository.findByPostIdAndTypeAndLanguage(postId, type, language)
-                        .orElse(null);
+	private Map<AudioType, Map<Language, String>> renewChangedArtifacts(PostEntity post) {
+		final var hashes = contentHashes(post);
+		final var uploads = new EnumMap<AudioType, Map<Language, String>>(AudioType.class);
 
-                    if (existing != null && hash.equals(existing.getContentHash())) {
-                        continue;
-                    }
+		for (var type : AudioType.values()) {
+			for (var language : Language.values()) {
+				renewIfChanged(post.getId(), type, language, hashes.get(language))
+					.ifPresent(url -> uploads
+						.computeIfAbsent(type, ignored -> new EnumMap<>(Language.class))
+						.put(language, url));
+			}
+		}
 
-                    final var artifact = existing != null
-                        ? existing
-                        : audioRepository.save(audioOutputMapper.toEntity(postId, type, language));
+		return uploads;
+	}
 
-                    uploads.computeIfAbsent(type, ignored -> new EnumMap<>(Language.class))
-                        .put(language, renewArtifact(artifact, hash));
-                }
-            }
+	private Optional<String> renewIfChanged(UUID postId, AudioType type, Language language, String hash) {
+		final var existing = audioRepository.findByPostIdAndTypeAndLanguage(postId, type, language);
+		final var unchanged = existing
+			.map(AudioEntity::getContentHash)
+			.filter(hash::equals)
+			.isPresent();
+		if (unchanged) {
+			return Optional.empty();
+		}
 
-            if (!uploads.isEmpty()) {
-                audioWorkerFeignClient.generate(new AudioJobRequest(
-                    postId,
-                    post.getSlug(),
-                    audioOutputMapper.toJobContents(post.getContents()),
-                    uploads
-                ));
-            }
-        } catch (Exception e) {
-            log.error("Failed to dispatch audio job for post {}", post.getId(), e);
-        }
-    }
+		final var artifact = existing.orElseGet(() ->
+			audioRepository.save(audioOutputMapper.toEntity(postId, type, language)));
 
-    private String renewArtifact(AudioEntity artifact, String contentHash) {
-        final var uploaded = storageOutput.presignUpload(
-            AUDIO_FOLDER,
-            artifact.getPostId().toString(),
-            artifact.getType().name() + "-" + artifact.getLanguage().name() + AUDIO_EXTENSION
-        );
+		return Optional.of(renewArtifact(artifact, hash));
+	}
 
-        if (artifact.getR2Key() != null) {
-            try {
-                storageOutput.delete(artifact.getR2Key());
-            } catch (BusinessException e) {
-                log.warn("Failed to delete stale audio object {} for post {}", artifact.getR2Key(), artifact.getPostId(), e);
-            }
-        }
+	private String renewArtifact(AudioEntity artifact, String contentHash) {
+		final var upload = storageOutput.presignUpload(
+			AUDIO_FOLDER,
+			artifact.getPostId().toString(),
+			objectName(artifact)
+		);
 
-        artifact.setR2Key(uploaded.key());
-        artifact.setStatus(AudioStatus.QUEUED);
-        artifact.setContentHash(contentHash);
-        artifact.setErrorMessage(null);
-        audioRepository.save(artifact);
+		if (artifact.getR2Key() != null) {
+			storageOutput.delete(artifact.getR2Key());
+		}
 
-        return uploaded.url();
-    }
+		artifact.setR2Key(upload.key());
+		artifact.setStatus(AudioStatus.QUEUED);
+		artifact.setContentHash(contentHash);
+		artifact.setErrorMessage(null);
+		audioRepository.save(artifact);
+		return upload.url();
+	}
 
-    static String contentHash(String title, String content) {
-        try {
-            final var digest = MessageDigest.getInstance("SHA-256");
-            final var bytes = digest.digest((title + "\n" + content).getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(bytes);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm unavailable", e);
-        }
-    }
+	private void submitJob(PostEntity post, Map<AudioType, Map<Language, String>> uploads) {
+		audioWorkerFeignClient.generate(new AudioJobRequest(
+			post.getId(),
+			post.getSlug(),
+			audioOutputMapper.toJobContents(post.getContents()),
+			uploads
+		));
+	}
 
-    private String contentHash(PostEntity post, Language language) {
-        return post.getContents().stream()
-            .filter(content -> content.getLanguage() == language)
-            .findFirst()
-            .map(content -> contentHash(content.getTitle(), content.getContent()))
-            .orElseThrow(() -> new IllegalStateException("Missing audio content for language " + language));
-    }
+	private Map<Language, String> contentHashes(PostEntity post) {
+		final var hashes = new EnumMap<Language, String>(Language.class);
+		for (var language : Language.values()) {
+			hashes.put(language, contentHashFor(post, language));
+		}
 
-    private PostEntity postEntity(UUID postId) {
-        return postRepository.findByIdWithContents(postId)
-            .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
-    }
+		return hashes;
+	}
 
-    private AudioModel toModel(AudioEntity artifact) {
-        return progress(artifact)
-            .map(progress -> audioOutputMapper.toModel(artifact, progress))
-            .orElseGet(() -> audioOutputMapper.toModel(artifact));
-    }
+	private String contentHashFor(PostEntity post, Language language) {
+		return post.getContents().stream()
+			.filter(content -> content.getLanguage() == language)
+			.findFirst()
+			.map(content -> contentHash(content.getTitle(), content.getContent()))
+			.orElseThrow(() -> new IllegalStateException("Missing audio content for language " + language));
+	}
 
-    private Optional<AudioProgressModel> progress(AudioEntity artifact) {
-        final var key = artifact.getPostId() + ":" + artifact.getType() + ":" + artifact.getLanguage();
-        return redisRepository.getValue(key)
-            .flatMap(this::readProgress);
-    }
+	private PostEntity findPost(UUID postId) {
+		return postRepository.findByIdWithContents(postId)
+			.orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
+	}
 
-    private Optional<AudioProgressModel> readProgress(String value) {
-        try {
-            return Optional.of(objectMapper.readValue(value, AudioProgressModel.class));
-        } catch (Exception e) {
-            log.warn("Ignoring unreadable audio progress payload: {}", value);
-            return Optional.empty();
-        }
-    }
+	private AudioModel toModel(AudioEntity artifact) {
+		return progress(artifact)
+			.map(progress -> audioOutputMapper.toModel(artifact, progress))
+			.orElseGet(() -> audioOutputMapper.toModel(artifact));
+	}
+
+	private Optional<AudioProgressModel> progress(AudioEntity artifact) {
+		return redisRepository.getValue(progressKey(artifact))
+			.flatMap(this::readProgress);
+	}
+
+	private Optional<AudioProgressModel> readProgress(String value) {
+		try {
+			return Optional.of(objectMapper.readValue(value, AudioProgressModel.class));
+		} catch (Exception e) {
+			log.warn("Ignoring unreadable audio progress payload: {}", value);
+			return Optional.empty();
+		}
+	}
+
+	private static String progressKey(AudioEntity artifact) {
+		return artifact.getPostId() + ":" + artifact.getType() + ":" + artifact.getLanguage();
+	}
+
+	private static String objectName(AudioEntity artifact) {
+		return artifact.getType().name() + "-" + artifact.getLanguage().name() + AUDIO_EXTENSION;
+	}
 }

@@ -12,10 +12,8 @@ import org.springframework.stereotype.Component;
 public class GetPostBySlugUseCase {
 
     private final PostOutput postOutput;
-    private final AudioOutput audioOutput;
 
     public PostModel execute(String slug, Language language, String ip) {
-        final var post = postOutput.findBySlugAndIncrementView(slug, language, ip);
-        return post.withAudio(audioOutput.artifactMap(post, language));
+        return postOutput.findBySlugAndIncrementView(slug, language, ip);
     }
 }

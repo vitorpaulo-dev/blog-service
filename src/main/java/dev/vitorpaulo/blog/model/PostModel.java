@@ -27,12 +27,4 @@ public record PostModel(
         Integer weight,
         Map<Language, PostContentModel> translations,
         Map<AudioType, Map<Language, AudioModel>> audio
-) {
-    public PostModel withAudio(Map<AudioType, Map<Language, AudioModel>> audio) {
-        return new PostModel(
-            id, slug, bannerUrl, status, estimatedReading, createdAt, updatedAt,
-            authors, tagIds, projectIds, viewCount, loveCount, celebrateCount,
-            geniusCount, helpCount, reactionCount, weight, translations, audio
-        );
-    }
-}
+) {}

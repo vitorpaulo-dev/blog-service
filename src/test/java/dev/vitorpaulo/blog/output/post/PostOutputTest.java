@@ -73,7 +73,7 @@ class PostOutputTest {
     void findById_found_mapsWithProjectAndTagIds() {
         var id = UUID.randomUUID();
         when(postRepository.findByIdWithContents(id)).thenReturn(Optional.of(postEntity));
-        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
 
         var result = postOutput.findById(id);
 
@@ -102,7 +102,7 @@ class PostOutputTest {
         postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "1.2.3.4");
 
         verify(postEntity).setViewCount(6L);
-        verify(postOutputMapper).toModel(eq(postEntity), anyList(), anyList());
+        verify(postOutputMapper).toModel(eq(postEntity), anyList(), anyList(), anyMap());
         verify(redisRepository).set(eq("post:" + postId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
         verify(redisRepository).addToSortedSet(eq("post:" + postId + ":views"), startsWith("1.2.3.4:"), anyDouble(), eq(Duration.ofHours(48)));
     }
@@ -442,7 +442,7 @@ class PostOutputTest {
         var tagId = UUID.randomUUID();
         when(postEntity.getId()).thenReturn(entityId);
         when(postRepository.findTagIds(entityId)).thenReturn(List.of(tagId));
-        when(postOutputMapper.toModel(postEntity, List.of(), List.of(tagId))).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(postEntity, List.of(), List.of(tagId), Map.of())).thenReturn(expectedResult);
         when(expectedResult.translations()).thenReturn(Map.of());
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
@@ -461,8 +461,8 @@ class PostOutputTest {
         when(secondPostEntity.getId()).thenReturn(idB);
         when(postRepository.findTagIds(idA)).thenReturn(List.of());
         when(postRepository.findTagIds(idB)).thenReturn(List.of());
-        when(postOutputMapper.toModel(postEntity, List.of(), List.of())).thenReturn(expectedResult);
-        when(postOutputMapper.toModel(secondPostEntity, List.of(), List.of())).thenReturn(secondResult);
+        when(postOutputMapper.toModel(postEntity, List.of(), List.of(), Map.of())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(secondPostEntity, List.of(), List.of(), Map.of())).thenReturn(secondResult);
         when(expectedResult.translations()).thenReturn(Map.of());
         when(secondResult.translations()).thenReturn(Map.of());
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
@@ -483,7 +483,7 @@ class PostOutputTest {
         translations.put(Language.PORTUGUESE, null);
         when(postEntity.getId()).thenReturn(entityId);
         when(postRepository.findTagIds(entityId)).thenReturn(List.of());
-        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
         when(expectedResult.translations()).thenReturn(translations);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
@@ -557,8 +557,8 @@ class PostOutputTest {
         translations.put(Language.ENGLISH, null);
         translations.put(Language.PORTUGUESE, null);
         when(postRepository.findFeatured()).thenReturn(List.of(postEntity, secondPostEntity));
-        when(postOutputMapper.toModel(postEntity, List.of(), List.of())).thenReturn(expectedResult);
-        when(postOutputMapper.toModel(secondPostEntity, List.of(), List.of())).thenReturn(secondResult);
+        when(postOutputMapper.toModel(postEntity, List.of(), List.of(), Map.of())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(secondPostEntity, List.of(), List.of(), Map.of())).thenReturn(secondResult);
         when(expectedResult.translations()).thenReturn(translations);
         when(secondResult.translations()).thenReturn(Map.of());
 

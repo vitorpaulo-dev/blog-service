@@ -10,7 +10,6 @@ import dev.vitorpaulo.blog.model.AudioStatus;
 import dev.vitorpaulo.blog.model.AudioType;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.PostStatus;
-import dev.vitorpaulo.blog.model.PostModel;
 import dev.vitorpaulo.blog.model.upload.SignedUrlModel;
 import dev.vitorpaulo.blog.output.mapper.AudioOutputMapper;
 import dev.vitorpaulo.blog.output.mapper.AudioOutputMapperImpl;
@@ -63,21 +62,12 @@ class AudioOutputTest {
 
     private UUID postId;
 
-    private PostModel postModel;
-
     @BeforeEach
     void setUp() {
         audioOutput = new AudioOutput(audioRepository, postRepository, storageOutput,
             audioWorkerFeignClient, redisRepository, objectMapper, new AudioOutputMapperImpl());
         postId = UUID.randomUUID();
-        postModel = mockPostModel(postId);
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
-    }
-
-    private PostModel mockPostModel(UUID id) {
-        var model = org.mockito.Mockito.mock(PostModel.class);
-        org.mockito.Mockito.when(model.id()).thenReturn(id);
-        return model;
     }
 
     @Test
@@ -270,7 +260,7 @@ class AudioOutputTest {
         when(audioRepository.findByPostId(postId)).thenReturn(List.of(narrationEn, narrationPt, podcastEn));
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
 
-        var full = audioOutput.artifactMap(postModel);
+        var full = audioOutput.artifactMap(publishedPost(), null);
         verifyNoInteractions(postRepository);
 
         assertEquals(2, full.get(AudioType.NARRATION).size());
@@ -287,7 +277,7 @@ class AudioOutputTest {
         when(audioRepository.findByPostId(postId)).thenReturn(List.of(narrationEn, narrationPt));
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
 
-        var filtered = audioOutput.artifactMap(postModel, Language.PORTUGUESE);
+        var filtered = audioOutput.artifactMap(publishedPost(), Language.PORTUGUESE);
 
         assertNull(filtered.get(AudioType.NARRATION).get(Language.ENGLISH));
         assertEquals(AudioStatus.GENERATING, filtered.get(AudioType.NARRATION).get(Language.PORTUGUESE).status());
@@ -298,7 +288,7 @@ class AudioOutputTest {
         when(audioRepository.findByPostId(postId)).thenReturn(List.of());
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
 
-        assertTrue(audioOutput.artifactMap(postModel).isEmpty());
+        assertTrue(audioOutput.artifactMap(publishedPost(), null).isEmpty());
     }
 
     @Test

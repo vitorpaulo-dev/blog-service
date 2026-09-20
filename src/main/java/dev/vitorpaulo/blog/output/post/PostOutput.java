@@ -53,7 +53,8 @@ public class PostOutput {
 			.map(entity -> postOutputMapper.toModel(
 				entity,
 				postRepository.findProjectIds(id),
-				postRepository.findTagIds(id)
+				postRepository.findTagIds(id),
+				audioOutput.artifactMap(entity, null)
 			))
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
     }
@@ -117,7 +118,8 @@ public class PostOutput {
 		return postOutputMapper.toModel(
 			entity,
 			postRepository.findProjectIds(entity.getId()),
-			postRepository.findTagIds(entity.getId())
+			postRepository.findTagIds(entity.getId()),
+			audioOutput.artifactMap(entity, language)
 		);
     }
 
@@ -151,7 +153,7 @@ public class PostOutput {
 
         final var saved = postRepository.save(entity);
         audioOutput.dispatch(saved);
-        return postOutputMapper.toModel(saved, projectIds, tagIds);
+        return postOutputMapper.toModel(saved, projectIds, tagIds, audioOutput.artifactMap(saved, null));
     }
 
     @Transactional
@@ -178,7 +180,7 @@ public class PostOutput {
 
         final var saved = postRepository.save(entity);
         audioOutput.dispatch(saved);
-        return postOutputMapper.toModel(saved, projectIds, tagIds);
+        return postOutputMapper.toModel(saved, projectIds, tagIds, audioOutput.artifactMap(saved, null));
     }
 
     @Transactional
@@ -209,7 +211,7 @@ public class PostOutput {
     public List<PostModel> findFeatured(Language language) {
         return postRepository.findFeatured()
             .stream()
-            .map(post -> postOutputMapper.toModel(post, Collections.emptyList(), Collections.emptyList()))
+            .map(post -> postOutputMapper.toModel(post, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
 			.peek(post -> {
 				final var contents = post.translations();
 				if (contents.size() <= 1) return;
@@ -237,7 +239,7 @@ public class PostOutput {
         return new PaginatedOutput<>(
 			page
 				.stream()
-				.map(post -> postOutputMapper.toModel(post, Collections.emptyList(), postRepository.findTagIds(post.getId())))
+				.map(post -> postOutputMapper.toModel(post, Collections.emptyList(), postRepository.findTagIds(post.getId()), Collections.emptyMap()))
 				.peek(post -> {
 					final var contents = post.translations();
 					if (contents.size() <= 1) return;
