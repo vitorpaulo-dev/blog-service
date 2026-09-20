@@ -1,6 +1,7 @@
 package dev.vitorpaulo.blog.usecase.audio;
 
 import dev.vitorpaulo.blog.model.AudioType;
+import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.output.audio.AudioOutput;
@@ -15,7 +16,7 @@ public class RetryPostAudioUseCase {
 
     private final AudioOutput audioOutput;
 
-    public AudioModel execute(UUID postId, AudioType type, Language language) {
-        return audioOutput.retry(postId, type, language);
+    public AudioModel execute(UUID postId, AudioType type, Language language, AuthorModel requester) {
+        return audioOutput.retry(postId, type, language, requester);
     }
 }

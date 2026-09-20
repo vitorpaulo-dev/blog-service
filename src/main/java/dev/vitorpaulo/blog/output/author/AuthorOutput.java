@@ -4,14 +4,21 @@ import com.clerk.backend_api.Clerk;
 import com.clerk.backend_api.models.operations.ListOrganizationMembershipsRequest;
 import dev.vitorpaulo.blog.common.exception.InternalException;
 import dev.vitorpaulo.blog.common.util.PostUtils;
+import dev.vitorpaulo.blog.config.security.AuthorRoleMapper;
+import dev.vitorpaulo.blog.domain.AuthorEntity;
 import dev.vitorpaulo.blog.output.mapper.AuthorOutputMapper;
 import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AuthorOutput {
@@ -30,7 +37,7 @@ public class AuthorOutput {
             .orElseThrow(InternalException::new);
 
         final var author = authorRepository.findBySubjectId(principal.getSubject())
-            .orElse(dev.vitorpaulo.blog.domain.AuthorEntity.builder()
+            .orElse(AuthorEntity.builder()
                 .subjectId(principal.getSubject())
                 .build());
 
@@ -44,22 +51,40 @@ public class AuthorOutput {
 
         authorRepository.save(author);
 
-        final var organization = clerk.organizationMemberships()
-            .list(ListOrganizationMembershipsRequest.builder()
-                .userId(java.util.List.of(user.id()))
-                .organizationId(organizationId)
-                .build())
-            .organizationMemberships()
-            .orElseThrow(InternalException::new)
-            .data()
-            .stream()
-            .findFirst()
-            .orElseThrow(InternalException::new);
+        final var role = resolveRole(user.id());
 
-        return authorOutputMapper.toModel(author, organization.role());
+        return authorOutputMapper.toModel(author, role);
     }
 
-    private String generateUniqueSlug(String name, java.util.UUID currentId) {
+    private String resolveRole(String clerkUserId) {
+        var resolvedRole = resolveMembershipRole(clerkUserId);
+        if (resolvedRole == null) {
+            return AuthorRoleMapper.MEMBER_CLERK_ROLE;
+        }
+        return resolvedRole;
+    }
+
+    private String resolveMembershipRole(String clerkUserId) {
+        try {
+            return clerk.organizationMemberships()
+                .list(ListOrganizationMembershipsRequest.builder()
+                    .userId(List.of(clerkUserId))
+                    .organizationId(organizationId)
+                    .build())
+                .organizationMemberships()
+                .orElseThrow(InternalException::new)
+                .data()
+                .stream()
+                .findFirst()
+                .map(membership -> membership.role())
+                .orElse(null);
+        } catch (Exception e) {
+            log.warn("Clerk membership lookup failed for user {}", clerkUserId, e);
+            return null;
+        }
+    }
+
+    private String generateUniqueSlug(String name, UUID currentId) {
         final var base = PostUtils.slugify(name);
         final var counter = authorRepository.countBySlugAndIdNot(base, currentId);
         if (counter == 0) {

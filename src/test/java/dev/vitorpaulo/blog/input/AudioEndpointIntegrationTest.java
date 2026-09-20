@@ -1,6 +1,7 @@
 package dev.vitorpaulo.blog.input;
 
 import dev.vitorpaulo.blog.usecase.audio.RetryPostAudioUseCase;
+import dev.vitorpaulo.blog.usecase.author.FindOrCreateAuthorUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -13,6 +14,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -30,6 +33,9 @@ class AudioEndpointIntegrationTest {
 
     @MockitoBean
     private RetryPostAudioUseCase retryPostAudioUseCase;
+
+    @MockitoBean
+    private FindOrCreateAuthorUseCase findOrCreateAuthorUseCase;
 
     @Test
     void retry_unauthenticated_returnsUnauthorized() throws Exception {
@@ -54,7 +60,8 @@ class AudioEndpointIntegrationTest {
         var postId = UUID.randomUUID();
         var jwt = Jwt.withTokenValue("token").header("alg", "none").subject("user").build();
         when(jwtDecoder.decode(any())).thenReturn(jwt);
-        when(retryPostAudioUseCase.execute(postId, dev.vitorpaulo.blog.model.AudioType.NARRATION, dev.vitorpaulo.blog.model.Language.ENGLISH))
+        when(findOrCreateAuthorUseCase.execute(any())).thenReturn(null);
+        when(retryPostAudioUseCase.execute(eq(postId), dev.vitorpaulo.blog.model.AudioType.NARRATION, dev.vitorpaulo.blog.model.Language.ENGLISH, isNull()))
             .thenReturn(new dev.vitorpaulo.blog.model.audio.AudioModel(
                 dev.vitorpaulo.blog.model.AudioType.NARRATION,
                 dev.vitorpaulo.blog.model.Language.ENGLISH,

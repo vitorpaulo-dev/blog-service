@@ -3,11 +3,15 @@ package dev.vitorpaulo.blog.output.audio;
 import dev.vitorpaulo.blog.client.audio.AudioJobRequest;
 import dev.vitorpaulo.blog.client.audio.AudioWorkerFeignClient;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
+import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
+import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.AudioEntity;
+import dev.vitorpaulo.blog.domain.AuthorEntity;
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.model.AudioStatus;
 import dev.vitorpaulo.blog.model.AudioType;
+import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.PostStatus;
 import dev.vitorpaulo.blog.model.upload.SignedUrlModel;
@@ -55,6 +59,7 @@ class AudioOutputTest {
     @Mock private StorageOutput storageOutput;
     @Mock private AudioWorkerFeignClient audioWorkerFeignClient;
     @Mock private RedisRepository redisRepository;
+    @Mock private AuthorRoleChecker authorRoleChecker;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -62,10 +67,12 @@ class AudioOutputTest {
 
     private UUID postId;
 
+    private final UUID authorId = UUID.randomUUID();
+
     @BeforeEach
     void setUp() {
         audioOutput = new AudioOutput(audioRepository, postRepository, storageOutput,
-            audioWorkerFeignClient, redisRepository, objectMapper, new AudioOutputMapperImpl());
+            audioWorkerFeignClient, redisRepository, objectMapper, new AudioOutputMapperImpl(), authorRoleChecker);
         postId = UUID.randomUUID();
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
     }
@@ -293,13 +300,14 @@ class AudioOutputTest {
 
     @Test
     void retry_generatingArtifact_conflicts() {
-        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(publishedPost()));
+        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(ownedPost()));
+        when(authorRoleChecker.isAdmin()).thenReturn(false);
         var artifact = artifact(AudioType.NARRATION, Language.ENGLISH, "post/audio/1/narration.wav", AudioStatus.GENERATING);
         when(audioRepository.findByPostIdAndTypeAndLanguage(postId, AudioType.NARRATION, Language.ENGLISH))
             .thenReturn(Optional.of(artifact));
 
         var exception = assertThrows(BusinessException.class,
-            () -> audioOutput.retry(postId, AudioType.NARRATION, Language.ENGLISH));
+            () -> audioOutput.retry(postId, AudioType.NARRATION, Language.ENGLISH, ownerAuthor()));
 
         assertEquals(409, exception.getStatus().value());
         verifyNoInteractions(audioWorkerFeignClient, storageOutput);
@@ -309,13 +317,14 @@ class AudioOutputTest {
     void retry_failedArtifact_deletesOldObjectAndDispatchesSingleArtifactQueued() {
         var oldKey = "post/audio/1/narration.wav";
         var artifact = artifact(AudioType.NARRATION, Language.ENGLISH, oldKey, AudioStatus.FAILED, "boom");
-        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(publishedPost()));
+        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(ownedPost()));
+        when(authorRoleChecker.isAdmin()).thenReturn(false);
         when(audioRepository.findByPostIdAndTypeAndLanguage(postId, AudioType.NARRATION, Language.ENGLISH))
             .thenReturn(Optional.of(artifact));
         stubArtifactSave();
         stubPresign();
 
-        var model = audioOutput.retry(postId, AudioType.NARRATION, Language.ENGLISH);
+        var model = audioOutput.retry(postId, AudioType.NARRATION, Language.ENGLISH, ownerAuthor());
 
         assertEquals(AudioStatus.QUEUED, model.status());
         var saved = ArgumentCaptor.forClass(AudioEntity.class);
@@ -331,13 +340,42 @@ class AudioOutputTest {
     }
 
     @Test
+    void retry_nonOwnerNonAdmin_forbidden() {
+        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(ownedPost()));
+        when(authorRoleChecker.isAdmin()).thenReturn(false);
+
+        var exception = assertThrows(BusinessException.class,
+            () -> audioOutput.retry(postId, AudioType.NARRATION, Language.ENGLISH, otherAuthor()));
+
+        assertEquals(ExceptionCode.FORBIDDEN, exception.getCode());
+        verifyNoInteractions(audioWorkerFeignClient, storageOutput);
+    }
+
+    @Test
+    void retry_adminNonOwner_allowed() {
+        var oldKey = "post/audio/1/narration.wav";
+        var artifact = artifact(AudioType.NARRATION, Language.ENGLISH, oldKey, AudioStatus.FAILED);
+        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(ownedPost()));
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
+        when(audioRepository.findByPostIdAndTypeAndLanguage(postId, AudioType.NARRATION, Language.ENGLISH))
+            .thenReturn(Optional.of(artifact));
+        stubArtifactSave();
+        stubPresign();
+
+        var model = audioOutput.retry(postId, AudioType.NARRATION, Language.ENGLISH, otherAuthor());
+
+        assertEquals(AudioStatus.QUEUED, model.status());
+    }
+
+    @Test
     void retry_missingArtifact_notFound() {
-        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(publishedPost()));
+        when(postRepository.findByIdWithContents(postId)).thenReturn(Optional.of(ownedPost()));
+        when(authorRoleChecker.isAdmin()).thenReturn(false);
         when(audioRepository.findByPostIdAndTypeAndLanguage(postId, AudioType.NARRATION, Language.ENGLISH))
             .thenReturn(Optional.empty());
 
         assertThrows(BusinessException.class,
-            () -> audioOutput.retry(postId, AudioType.NARRATION, Language.ENGLISH));
+            () -> audioOutput.retry(postId, AudioType.NARRATION, Language.ENGLISH, ownerAuthor()));
 
         verifyNoInteractions(audioWorkerFeignClient, storageOutput);
     }
@@ -365,6 +403,20 @@ class AudioOutputTest {
 
     private PostEntity publishedPost() {
         return post(PostStatus.PUBLISHED);
+    }
+
+    private PostEntity ownedPost() {
+        var post = publishedPost();
+        post.setAuthors(List.of(AuthorEntity.builder().id(authorId).build()));
+        return post;
+    }
+
+    private AuthorModel ownerAuthor() {
+        return new AuthorModel(authorId, "Owner", null, null, null, "org:member");
+    }
+
+    private AuthorModel otherAuthor() {
+        return new AuthorModel(UUID.randomUUID(), "Other", null, null, null, "org:member");
     }
 
     private PostEntity post(PostStatus status) {

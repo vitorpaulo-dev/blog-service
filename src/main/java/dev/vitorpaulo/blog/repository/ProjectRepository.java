@@ -35,6 +35,7 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
 		SELECT p FROM ProjectEntity p
 		JOIN FETCH p.contents c
 		WHERE p.slug = :slug
+		  AND p.status = 'PUBLISHED'
 		  AND c.id = COALESCE(
 			  (SELECT pc.id FROM ProjectContentEntity pc WHERE pc.project = p AND pc.language = :language),
 			  (SELECT pc2.id FROM ProjectContentEntity pc2 WHERE pc2.project = p ORDER BY pc2.language LIMIT 1)
@@ -42,7 +43,7 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
 	""")
 	Optional<ProjectEntity> findBySlugAndLanguage(String slug, Language language);
 
-    Optional<ProjectEntity> findBySlug(String slug);
+    Optional<ProjectEntity> findBySlugAndStatus(String slug, ProjectStatus status);
 
     long countBySlugAndIdNot(String slug, UUID id);
 
@@ -144,9 +145,8 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
         String sort
     );
 
-    @Modifying
     @Query("""
-        DELETE FROM ProjectEntity p
+        SELECT DISTINCT p FROM ProjectEntity p
         WHERE p.id IN :ids
           AND (
               :bypass = true
@@ -157,7 +157,7 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
               )
           )
     """)
-    void deleteByIdWithAuthor(List<UUID> ids, UUID author, Boolean bypass);
+    List<ProjectEntity> findAllByIdWithAuthor(List<UUID> ids, UUID author, Boolean bypass);
 
     @Query("""
         SELECT p FROM ProjectEntity p

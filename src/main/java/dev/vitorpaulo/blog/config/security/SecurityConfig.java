@@ -1,5 +1,6 @@
 package dev.vitorpaulo.blog.config.security;
 
+import dev.vitorpaulo.blog.usecase.author.FindOrCreateAuthorUseCase;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,11 +10,11 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -30,14 +31,24 @@ public class SecurityConfig {
 	private String issuerUri;
 
 	@Bean
-	public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
+	public SecurityFilterChain securityFilterChain(
+		HttpSecurity http,
+		JwtAuthenticationConverter jwtAuthenticationConverter,
+		FindOrCreateAuthorUseCase findOrCreateAuthorUseCase
+	) {
 		http
 			.csrf(AbstractHttpConfigurer::disable)
 			.cors(cors -> cors.configurationSource(corsConfigurationSource()))
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-				.requestMatchers(HttpMethod.GET, "/actuator/**").permitAll()
+				.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+				.requestMatchers("/actuator/**").hasRole("ADMIN")
+				.requestMatchers("/v1/webhook/**").permitAll()
+				.requestMatchers(HttpMethod.POST, "/v1/post/*/react").permitAll()
+				.requestMatchers(HttpMethod.POST, "/v1/project/*/react").permitAll()
+				.requestMatchers(HttpMethod.POST, "/v1/newsletter/subscribe").permitAll()
+				.requestMatchers(HttpMethod.POST, "/v1/post/featured").hasRole("ADMIN")
 				.requestMatchers(HttpMethod.GET, "/v1/post/featured/**").permitAll()
 				.requestMatchers(HttpMethod.GET, "/v1/post/slug/**").permitAll()
 				.requestMatchers(HttpMethod.POST, "/v1/post/search").permitAll()
@@ -48,14 +59,16 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.POST, "/v1/project/search").permitAll()
 				.requestMatchers(HttpMethod.POST, "/v1/project/batch").permitAll()
 				.requestMatchers(HttpMethod.GET, "/v1/project/*").authenticated()
-			.requestMatchers(HttpMethod.POST, "/v1/tag/search").permitAll()
-			.requestMatchers(HttpMethod.POST, "/v1/tag/batch").permitAll()
-			.requestMatchers("/v1/tag/**").authenticated()
-			.requestMatchers("/v1/newsletter/subscriber/**").authenticated()
-			.requestMatchers("/v1/dashboard/**").authenticated()
-			.requestMatchers(HttpMethod.POST, "/v1/upload/presign").authenticated()
-				.anyRequest().permitAll()
+				.requestMatchers(HttpMethod.POST, "/v1/tag/search").permitAll()
+				.requestMatchers(HttpMethod.POST, "/v1/tag/batch").permitAll()
+				.requestMatchers("/v1/tag/**").authenticated()
+				.requestMatchers("/v1/newsletter/subscriber/**").authenticated()
+				.requestMatchers("/v1/dashboard/**").authenticated()
+				.requestMatchers(HttpMethod.POST, "/v1/upload/sign").permitAll()
+				.requestMatchers("/v1/upload/**").authenticated()
+				.anyRequest().authenticated()
 			)
+			.addFilterAfter(new AuthorRoleFilter(findOrCreateAuthorUseCase), BearerTokenAuthenticationFilter.class)
 			.oauth2ResourceServer(oauth2 -> oauth2
 				.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
 			);
@@ -71,16 +84,7 @@ public class SecurityConfig {
 		converter.setJwtGrantedAuthoritiesConverter(jwt -> {
 			Collection<GrantedAuthority> authorities = new ArrayList<>();
 
-			Object orgRole = jwt.getClaim("org_role");
-			if (orgRole instanceof String stringClaim) {
-				authorities.add(new SimpleGrantedAuthority("ROLE_" + stringClaim.toUpperCase()));
-			} else if (orgRole instanceof Collection<?> collection) {
-				for (Object item : collection) {
-					if (item instanceof String s) {
-						authorities.add(new SimpleGrantedAuthority("ROLE_" + s.toUpperCase()));
-					}
-				}
-			}
+			collectClaimedAuthorities(jwt.getClaim("org_role"), authorities);
 
 			Collection<GrantedAuthority> scopeAuthorities = scopeConverter.convert(jwt);
 			if (scopeAuthorities != null) {
@@ -94,6 +98,18 @@ public class SecurityConfig {
 			return authorities;
 		});
 		return converter;
+	}
+
+	private void collectClaimedAuthorities(Object claim, Collection<GrantedAuthority> authorities) {
+		if (claim instanceof String role) {
+			authorities.add(AuthorRoleMapper.toAuthority(role));
+		} else if (claim instanceof Collection<?> collection) {
+			for (Object item : collection) {
+				if (item instanceof String role) {
+					authorities.add(AuthorRoleMapper.toAuthority(role));
+				}
+			}
+		}
 	}
 
 	@Bean

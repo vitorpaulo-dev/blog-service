@@ -118,7 +118,12 @@ public class PostController {
     }
 
     @PostMapping("/{postId}/audio/{type}/{language}/retry")
-    public AudioResponse retry(@PathVariable UUID postId, @PathVariable AudioType type, @PathVariable Language language) {
-        return audioInputMapper.toResponse(retryPostAudioUseCase.execute(postId, type, language));
+    public AudioResponse retry(
+        @PathVariable UUID postId,
+        @PathVariable AudioType type,
+        @PathVariable Language language,
+        @CurrentAuthor AuthorModel author
+    ) {
+        return audioInputMapper.toResponse(retryPostAudioUseCase.execute(postId, type, language, author));
     }
 }

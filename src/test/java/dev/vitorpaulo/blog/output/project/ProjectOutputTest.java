@@ -4,6 +4,7 @@ import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.domain.ProjectContentEntity;
 import dev.vitorpaulo.blog.domain.ProjectEntity;
+import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.ProjectOutputMapper;
@@ -45,6 +46,7 @@ class ProjectOutputTest {
     @Mock private AuthorRepository authorRepository;
     @Mock private TagRepository tagRepository;
     @Mock private RedisRepository redisRepository;
+    @Mock private AuthorRoleChecker authorRoleChecker;
     @Mock private AuthorModel author;
     @Mock private ProjectModel project;
     @Mock private ProjectModel expectedResult;
@@ -63,6 +65,7 @@ class ProjectOutputTest {
     void setUp() {
         lenient().when(author.id()).thenReturn(UUID.randomUUID());
         lenient().when(author.role()).thenReturn("org:admin");
+        lenient().when(authorRoleChecker.isAdmin()).thenReturn(false);
     }
 
     @Test
@@ -148,7 +151,7 @@ class ProjectOutputTest {
     void react_keyAbsent_incrementsCountSavesAndSetsKey(ReactionType reactionType) {
         var projectId = UUID.randomUUID();
         stubReactionCount(reactionType, 1L);
-        when(projectRepository.findBySlug("my-project")).thenReturn(Optional.of(projectEntity));
+        when(projectRepository.findBySlugAndStatus("my-project", ProjectStatus.PUBLISHED)).thenReturn(Optional.of(projectEntity));
         when(projectEntity.getId()).thenReturn(projectId);
         when(redisRepository.keyExists(anyString())).thenReturn(false);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
@@ -167,7 +170,7 @@ class ProjectOutputTest {
     void react_keyAlreadyPresent_returnsCountsUnchanged(ReactionType reactionType) {
         var projectId = UUID.randomUUID();
         var expected = new ReactionModel(1L, 2L, 3L, 4L, 10L);
-        when(projectRepository.findBySlug("my-project")).thenReturn(Optional.of(projectEntity));
+        when(projectRepository.findBySlugAndStatus("my-project", ProjectStatus.PUBLISHED)).thenReturn(Optional.of(projectEntity));
         when(projectEntity.getId()).thenReturn(projectId);
         when(redisRepository.keyExists("project:" + projectId + ":reaction:203.0.113.7:" + reactionType)).thenReturn(true);
         when(projectOutputMapper.toReactionModel(projectEntity)).thenReturn(expected);
@@ -182,7 +185,7 @@ class ProjectOutputTest {
 
     @Test
     void react_unknownSlug_throwsNotFoundException() {
-        when(projectRepository.findBySlug("nonexistent")).thenReturn(Optional.empty());
+        when(projectRepository.findBySlugAndStatus("nonexistent", ProjectStatus.PUBLISHED)).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class,
                 () -> projectOutput.react("nonexistent", ReactionType.LOVE, "203.0.113.7"));
@@ -266,6 +269,7 @@ class ProjectOutputTest {
     void update_notFound_throwsNotFoundException() {
         var projectId = UUID.randomUUID();
         when(project.id()).thenReturn(projectId);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class, () -> projectOutput.update(project, null, author));
@@ -283,6 +287,7 @@ class ProjectOutputTest {
         var contents = new ArrayList<>(List.of(existingContent));
         when(projectEntity.getContents()).thenReturn(contents);
         when(projectEntity.getId()).thenReturn(projectId);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.of(projectEntity));
         when(projectRepository.countBySlugAndIdNot("changed-title", projectId)).thenReturn(0L);
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
@@ -302,6 +307,7 @@ class ProjectOutputTest {
         when(existingContent.getTitle()).thenReturn("Same Title");
         var contents = new ArrayList<>(List.of(existingContent));
         when(projectEntity.getContents()).thenReturn(contents);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.of(projectEntity));
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
 
@@ -322,6 +328,7 @@ class ProjectOutputTest {
         when(existingContent.getTitle()).thenReturn("Old Title");
         var contents = new ArrayList<>(List.of(existingContent));
         when(projectEntity.getContents()).thenReturn(contents);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.of(projectEntity));
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
 
@@ -344,6 +351,7 @@ class ProjectOutputTest {
         when(projectEntity.getContents()).thenReturn(contents);
         when(projectOutputMapper.toContentEntity(projectContentModel)).thenReturn(newContent);
         when(newContent.getLanguage()).thenReturn(Language.PORTUGUESE);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(projectRepository.findByIdWithAuthor(projectId, author.id(), true)).thenReturn(Optional.of(projectEntity));
         when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
 
@@ -359,7 +367,6 @@ class ProjectOutputTest {
     void update_nonAdmin_requiresOwnership() {
         var projectId = UUID.randomUUID();
         when(author.id()).thenReturn(UUID.randomUUID());
-        when(author.role()).thenReturn("org:member");
         when(project.translations()).thenReturn(Map.of(Language.ENGLISH, projectContentModel));
         when(project.id()).thenReturn(projectId);
         when(projectContentModel.title()).thenReturn("Title");
@@ -378,21 +385,37 @@ class ProjectOutputTest {
     @Test
     void deleteAll_admin_bypassesOwnershipCheck() {
         var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
+        var entities = List.of(projectEntity, secondProjectEntity);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
+        when(projectRepository.findAllByIdWithAuthor(ids, author.id(), true)).thenReturn(entities);
 
         projectOutput.deleteAll(ids, author);
 
-        verify(projectRepository).deleteByIdWithAuthor(ids, author.id(), true);
+        verify(projectRepository).deleteAll(entities);
     }
 
     @Test
     void deleteAll_nonAdmin_requiresOwnership() {
         var ids = List.of(UUID.randomUUID());
-        when(author.id()).thenReturn(UUID.randomUUID());
-        when(author.role()).thenReturn("org:member");
+        var authorId = UUID.randomUUID();
+        when(author.id()).thenReturn(authorId);
+        var entities = List.of(projectEntity);
+        when(projectRepository.findAllByIdWithAuthor(ids, authorId, false)).thenReturn(entities);
 
         projectOutput.deleteAll(ids, author);
 
-        verify(projectRepository).deleteByIdWithAuthor(ids, author.id(), false);
+        verify(projectRepository).deleteAll(entities);
+    }
+
+    @Test
+    void deleteAll_missingOrForeignId_deletesResolvableEntitiesOnly() {
+        var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
+        when(projectRepository.findAllByIdWithAuthor(ids, author.id(), true)).thenReturn(List.of(projectEntity));
+
+        projectOutput.deleteAll(ids, author);
+
+        verify(projectRepository).deleteAll(List.of(projectEntity));
     }
 
     @Test
@@ -421,7 +444,10 @@ class ProjectOutputTest {
     }
 
     @Test
-    void search_withAuthor_showsDrafts() {
+    void search_withAuthor_showsOwnDraftsOnly() {
+        var authorId = UUID.randomUUID();
+        when(author.id()).thenReturn(authorId);
+        when(projectQueryModel.authorId()).thenReturn(authorId);
         when(projectQueryModel.language()).thenReturn(Language.ENGLISH);
         when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
                 .thenReturn(new PageImpl<>(List.of()));
@@ -429,6 +455,20 @@ class ProjectOutputTest {
         projectOutput.search(input(projectQueryModel, "createdAt", Sort.Direction.DESC), author);
 
         verify(projectRepository).search(any(), any(), any(), any(), eq(true),
+                any(PageRequest.class), anyString());
+    }
+
+    @Test
+    void search_memberWithOtherAuthorId_hidesDrafts() {
+        var filterAuthorId = UUID.randomUUID();
+        when(projectQueryModel.authorId()).thenReturn(filterAuthorId);
+        when(projectQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        projectOutput.search(input(projectQueryModel, "createdAt", Sort.Direction.DESC), author);
+
+        verify(projectRepository).search(any(), eq(filterAuthorId), any(), any(), eq(false),
                 any(PageRequest.class), anyString());
     }
 

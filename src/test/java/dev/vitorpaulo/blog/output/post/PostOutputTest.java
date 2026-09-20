@@ -3,6 +3,7 @@ package dev.vitorpaulo.blog.output.post;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
+import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.model.*;
@@ -49,6 +50,7 @@ class PostOutputTest {
     @Mock private AuthorRepository authorRepository;
     @Mock private RedisRepository redisRepository;
     @Mock private AudioOutput audioOutput;
+    @Mock private AuthorRoleChecker authorRoleChecker;
     @Mock private PostModel post;
     @Mock private PostModel expectedResult;
     @Mock private PostModel secondResult;
@@ -67,6 +69,7 @@ class PostOutputTest {
     void setUp() {
         lenient().when(author.id()).thenReturn(UUID.randomUUID());
         lenient().when(author.role()).thenReturn("org:admin");
+        lenient().when(authorRoleChecker.isAdmin()).thenReturn(false);
     }
 
     @Test
@@ -152,7 +155,7 @@ class PostOutputTest {
     void react_keyAbsent_incrementsCountSavesAndSetsKey(ReactionType reactionType) {
         var postId = UUID.randomUUID();
         stubReactionCount(reactionType, 1L);
-        when(postRepository.findBySlug("my-post")).thenReturn(Optional.of(postEntity));
+        when(postRepository.findBySlugAndStatus("my-post", PostStatus.PUBLISHED)).thenReturn(Optional.of(postEntity));
         when(postEntity.getId()).thenReturn(postId);
         when(redisRepository.keyExists(anyString())).thenReturn(false);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
@@ -171,7 +174,7 @@ class PostOutputTest {
     void react_keyAlreadyPresent_returnsCountsUnchanged(ReactionType reactionType) {
         var postId = UUID.randomUUID();
         var expected = new ReactionModel(1L, 2L, 3L, 4L, 10L);
-        when(postRepository.findBySlug("my-post")).thenReturn(Optional.of(postEntity));
+        when(postRepository.findBySlugAndStatus("my-post", PostStatus.PUBLISHED)).thenReturn(Optional.of(postEntity));
         when(postEntity.getId()).thenReturn(postId);
         when(redisRepository.keyExists("post:" + postId + ":reaction:203.0.113.7:" + reactionType)).thenReturn(true);
         when(postOutputMapper.toReactionModel(postEntity)).thenReturn(expected);
@@ -186,7 +189,7 @@ class PostOutputTest {
 
     @Test
     void react_unknownSlug_throwsNotFoundException() {
-        when(postRepository.findBySlug("nonexistent")).thenReturn(Optional.empty());
+        when(postRepository.findBySlugAndStatus("nonexistent", PostStatus.PUBLISHED)).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class,
                 () -> postOutput.react("nonexistent", ReactionType.LOVE, "203.0.113.7"));
@@ -281,6 +284,7 @@ class PostOutputTest {
         var postId = UUID.randomUUID();
         when(post.translations()).thenReturn(Map.of(Language.ENGLISH, postContentModel));
         when(post.id()).thenReturn(postId);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class, () -> postOutput.update(post, null, null, author));
@@ -299,6 +303,7 @@ class PostOutputTest {
         var contents = new java.util.ArrayList<>(List.of(existingContent));
         when(postEntity.getContents()).thenReturn(contents);
         when(postEntity.getId()).thenReturn(postId);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.countBySlugAndIdNot("changed-title", postId)).thenReturn(0L);
         when(postRepository.save(postEntity)).thenReturn(postEntity);
@@ -319,6 +324,7 @@ class PostOutputTest {
         when(existingContent.getTitle()).thenReturn("Same Title");
         var contents = new java.util.ArrayList<>(List.of(existingContent));
         when(postEntity.getContents()).thenReturn(contents);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.save(postEntity)).thenReturn(postEntity);
 
@@ -343,6 +349,7 @@ class PostOutputTest {
         when(postEntity.getContents()).thenReturn(contents);
         when(postOutputMapper.toContentEntity(postContentModel)).thenReturn(newContent);
         when(newContent.getLanguage()).thenReturn(Language.PORTUGUESE);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(postRepository.findByIdWithAuthor(postId, author.id(), true)).thenReturn(Optional.of(postEntity));
         when(postRepository.save(postEntity)).thenReturn(postEntity);
 
@@ -357,21 +364,37 @@ class PostOutputTest {
     @Test
     void deleteAll_admin_bypassesOwnershipCheck() {
         var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
+        var entities = List.of(postEntity, secondPostEntity);
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
+        when(postRepository.findAllByIdWithAuthor(ids, author.id(), true)).thenReturn(entities);
 
         postOutput.deleteAll(ids, author);
 
-        verify(postRepository).deleteByIdWithAuthor(ids, author.id(), true);
+        verify(postRepository).deleteAll(entities);
     }
 
     @Test
     void deleteAll_nonAdmin_requiresOwnership() {
         var ids = List.of(UUID.randomUUID());
-        when(author.id()).thenReturn(UUID.randomUUID());
-        when(author.role()).thenReturn("org:member");
+        var authorId = UUID.randomUUID();
+        when(author.id()).thenReturn(authorId);
+        var entities = List.of(postEntity);
+        when(postRepository.findAllByIdWithAuthor(ids, authorId, false)).thenReturn(entities);
 
         postOutput.deleteAll(ids, author);
 
-        verify(postRepository).deleteByIdWithAuthor(ids, author.id(), false);
+        verify(postRepository).deleteAll(entities);
+    }
+
+    @Test
+    void deleteAll_missingOrForeignId_deletesResolvableEntitiesOnly() {
+        var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
+        when(authorRoleChecker.isAdmin()).thenReturn(true);
+        when(postRepository.findAllByIdWithAuthor(ids, author.id(), true)).thenReturn(List.of(postEntity));
+
+        postOutput.deleteAll(ids, author);
+
+        verify(postRepository).deleteAll(List.of(postEntity));
     }
 
     @Test
@@ -400,7 +423,10 @@ class PostOutputTest {
     }
 
     @Test
-    void search_withAuthor_showsDrafts() {
+    void search_withAuthor_showsOwnDraftsOnly() {
+        var authorId = UUID.randomUUID();
+        when(author.id()).thenReturn(authorId);
+        when(postQueryModel.authorId()).thenReturn(authorId);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
                 .thenReturn(new PageImpl<>(List.of()));
@@ -408,6 +434,20 @@ class PostOutputTest {
         postOutput.search(input(postQueryModel, "createdAt", Sort.Direction.DESC), author);
 
         verify(postRepository).search(any(), any(), any(), any(), eq(true),
+                any(PageRequest.class), eq("createdAt"), eq("DESC"));
+    }
+
+    @Test
+    void search_memberWithOtherAuthorId_hidesDrafts() {
+        var filterAuthorId = UUID.randomUUID();
+        when(postQueryModel.authorId()).thenReturn(filterAuthorId);
+        when(postQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        postOutput.search(input(postQueryModel, "createdAt", Sort.Direction.DESC), author);
+
+        verify(postRepository).search(any(), eq(filterAuthorId), any(), any(), eq(false),
                 any(PageRequest.class), eq("createdAt"), eq("DESC"));
     }
 
@@ -528,16 +568,6 @@ class PostOutputTest {
 
         verify(postRepository).clearFeaturedWeights();
         verify(postRepository, never()).updateWeight(any(), any());
-    }
-
-    @Test
-    void setFeaturedWeights_nonAdmin_throwsForbidden() {
-        when(author.role()).thenReturn("org:member");
-
-        var ex = assertThrows(BusinessException.class,
-                () -> postOutput.setFeaturedWeights(List.of(new FeaturedPostModel(UUID.randomUUID(), 1)), author));
-        assertEquals(ExceptionCode.FORBIDDEN, ex.getCode());
-        verify(postRepository, never()).clearFeaturedWeights();
     }
 
     @Test

@@ -58,12 +58,14 @@ class DashboardEndpointIntegrationTest {
 	}
 
 	@Test
-	void topPosts_nonAdmin_returnsForbidden() throws Exception {
+	void topPosts_memberAuthor_returnsPayload() throws Exception {
 		var author = authorWithRole("org:member");
 		when(findOrCreateAuthorUseCase.execute(any())).thenReturn(author);
+		when(getTopPostsUseCase.execute(5)).thenReturn(new TopPostsModel(List.of(), List.of()));
 
 		mockMvc.perform(get("/v1/dashboard/posts/top").header("Authorization", "Bearer member-token"))
-				.andExpect(status().isForbidden());
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.allTime").isArray());
 	}
 
 	@Test
