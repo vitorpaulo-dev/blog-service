@@ -10,6 +10,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public enum UploadFolder {
 
+	POST_AUDIO("post", "audio"),
 	POST_BANNER("post", "banner"),
 	POST_CONTENT("post", "content"),
 	PROJECT_LOGO("project", "logo"),

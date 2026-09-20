@@ -8,6 +8,7 @@ import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
+import dev.vitorpaulo.blog.output.audio.AudioOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -46,6 +48,7 @@ class PostOutputTest {
     @Mock private TagRepository tagRepository;
     @Mock private AuthorRepository authorRepository;
     @Mock private RedisRepository redisRepository;
+    @Mock private AudioOutput audioOutput;
     @Mock private PostModel post;
     @Mock private PostModel expectedResult;
     @Mock private PostModel secondResult;
@@ -70,7 +73,7 @@ class PostOutputTest {
     void findById_found_mapsWithProjectAndTagIds() {
         var id = UUID.randomUUID();
         when(postRepository.findByIdWithContents(id)).thenReturn(Optional.of(postEntity));
-        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
 
         var result = postOutput.findById(id);
 
@@ -99,7 +102,7 @@ class PostOutputTest {
         postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "1.2.3.4");
 
         verify(postEntity).setViewCount(6L);
-        verify(postOutputMapper).toModel(eq(postEntity), anyList(), anyList());
+        verify(postOutputMapper).toModel(eq(postEntity), anyList(), anyList(), anyMap());
         verify(redisRepository).set(eq("post:" + postId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
         verify(redisRepository).addToSortedSet(eq("post:" + postId + ":views"), startsWith("1.2.3.4:"), anyDouble(), eq(Duration.ofHours(48)));
     }
@@ -234,6 +237,9 @@ class PostOutputTest {
 
         postOutput.save(post, null, null, author);
 
+        var saved = ArgumentCaptor.forClass(PostEntity.class);
+        verify(audioOutput).dispatch(saved.capture());
+        assertEquals(1, saved.getValue().getContents().size());
         verify(newContent).setLanguage(Language.ENGLISH);
         verify(postRepository).save(any(PostEntity.class));
     }
@@ -321,6 +327,7 @@ class PostOutputTest {
         verify(postEntity, never()).setSlug(anyString());
         verify(postRepository, never()).countBySlugAndIdNot(anyString(), any());
         verify(existingContent).setContent("New Content");
+        verify(audioOutput).dispatch(postEntity);
     }
 
     @Test
@@ -435,7 +442,7 @@ class PostOutputTest {
         var tagId = UUID.randomUUID();
         when(postEntity.getId()).thenReturn(entityId);
         when(postRepository.findTagIds(entityId)).thenReturn(List.of(tagId));
-        when(postOutputMapper.toModel(postEntity, List.of(), List.of(tagId))).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(postEntity, List.of(), List.of(tagId), Map.of())).thenReturn(expectedResult);
         when(expectedResult.translations()).thenReturn(Map.of());
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
@@ -454,8 +461,8 @@ class PostOutputTest {
         when(secondPostEntity.getId()).thenReturn(idB);
         when(postRepository.findTagIds(idA)).thenReturn(List.of());
         when(postRepository.findTagIds(idB)).thenReturn(List.of());
-        when(postOutputMapper.toModel(postEntity, List.of(), List.of())).thenReturn(expectedResult);
-        when(postOutputMapper.toModel(secondPostEntity, List.of(), List.of())).thenReturn(secondResult);
+        when(postOutputMapper.toModel(postEntity, List.of(), List.of(), Map.of())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(secondPostEntity, List.of(), List.of(), Map.of())).thenReturn(secondResult);
         when(expectedResult.translations()).thenReturn(Map.of());
         when(secondResult.translations()).thenReturn(Map.of());
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
@@ -476,7 +483,7 @@ class PostOutputTest {
         translations.put(Language.PORTUGUESE, null);
         when(postEntity.getId()).thenReturn(entityId);
         when(postRepository.findTagIds(entityId)).thenReturn(List.of());
-        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
         when(expectedResult.translations()).thenReturn(translations);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
         when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
@@ -550,8 +557,8 @@ class PostOutputTest {
         translations.put(Language.ENGLISH, null);
         translations.put(Language.PORTUGUESE, null);
         when(postRepository.findFeatured()).thenReturn(List.of(postEntity, secondPostEntity));
-        when(postOutputMapper.toModel(postEntity, List.of(), List.of())).thenReturn(expectedResult);
-        when(postOutputMapper.toModel(secondPostEntity, List.of(), List.of())).thenReturn(secondResult);
+        when(postOutputMapper.toModel(postEntity, List.of(), List.of(), Map.of())).thenReturn(expectedResult);
+        when(postOutputMapper.toModel(secondPostEntity, List.of(), List.of(), Map.of())).thenReturn(secondResult);
         when(expectedResult.translations()).thenReturn(translations);
         when(secondResult.translations()).thenReturn(Map.of());
 

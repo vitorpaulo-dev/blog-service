@@ -6,6 +6,7 @@ import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.common.util.PostUtils;
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
+import dev.vitorpaulo.blog.output.audio.AudioOutput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
@@ -37,7 +38,8 @@ public class PostOutput {
 	private final ProjectRepository projectRepository;
 	private final TagRepository tagRepository;
 	private final AuthorRepository authorRepository;
-	private final RedisRepository redisRepository;
+    private final RedisRepository redisRepository;
+    private final AudioOutput audioOutput;
 
 	private static final String KEY_PREFIX = "post:";
 	private static final String VIEWS_KEY_SUFFIX = ":views";
@@ -51,7 +53,8 @@ public class PostOutput {
 			.map(entity -> postOutputMapper.toModel(
 				entity,
 				postRepository.findProjectIds(id),
-				postRepository.findTagIds(id)
+				postRepository.findTagIds(id),
+				audioOutput.artifactMap(entity, null)
 			))
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
     }
@@ -115,7 +118,8 @@ public class PostOutput {
 		return postOutputMapper.toModel(
 			entity,
 			postRepository.findProjectIds(entity.getId()),
-			postRepository.findTagIds(entity.getId())
+			postRepository.findTagIds(entity.getId()),
+			audioOutput.artifactMap(entity, language)
 		);
     }
 
@@ -148,7 +152,8 @@ public class PostOutput {
         if (projectIds != null) entity.setProjects(projectRepository.findAllById(projectIds));
 
         final var saved = postRepository.save(entity);
-        return postOutputMapper.toModel(saved, projectIds, tagIds);
+        audioOutput.dispatch(saved);
+        return postOutputMapper.toModel(saved, projectIds, tagIds, audioOutput.artifactMap(saved, null));
     }
 
     @Transactional
@@ -174,7 +179,8 @@ public class PostOutput {
         entity.setProjects(projectRepository.findAllById(Objects.requireNonNullElse(projectIds, Collections.emptyList())));
 
         final var saved = postRepository.save(entity);
-        return postOutputMapper.toModel(saved, projectIds, tagIds);
+        audioOutput.dispatch(saved);
+        return postOutputMapper.toModel(saved, projectIds, tagIds, audioOutput.artifactMap(saved, null));
     }
 
     @Transactional
@@ -205,7 +211,7 @@ public class PostOutput {
     public List<PostModel> findFeatured(Language language) {
         return postRepository.findFeatured()
             .stream()
-            .map(post -> postOutputMapper.toModel(post, Collections.emptyList(), Collections.emptyList()))
+            .map(post -> postOutputMapper.toModel(post, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
 			.peek(post -> {
 				final var contents = post.translations();
 				if (contents.size() <= 1) return;
@@ -233,7 +239,7 @@ public class PostOutput {
         return new PaginatedOutput<>(
 			page
 				.stream()
-				.map(post -> postOutputMapper.toModel(post, Collections.emptyList(), postRepository.findTagIds(post.getId())))
+				.map(post -> postOutputMapper.toModel(post, Collections.emptyList(), postRepository.findTagIds(post.getId()), Collections.emptyMap()))
 				.peek(post -> {
 					final var contents = post.translations();
 					if (contents.size() <= 1) return;

@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
@@ -44,8 +45,22 @@ public class R2Config {
 			.build();
 	}
 
-	@Bean
-	public S3Presigner s3Uploader() {
+    @Bean
+    public S3Client s3Deleter() {
+        if (StringUtils.isAnyBlank(endpoint, accessKeyId, secretAccessKey)) {
+            return null;
+        }
+
+        return S3Client.builder()
+            .region(Region.of("auto"))
+            .endpointOverride(URI.create(endpoint))
+            .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKeyId, secretAccessKey)))
+            .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+            .build();
+    }
+
+    @Bean
+    public S3Presigner s3Uploader() {
 		if (StringUtils.isAnyBlank(endpoint, accessKeyId, secretAccessKey)) {
 			return null;
 		}

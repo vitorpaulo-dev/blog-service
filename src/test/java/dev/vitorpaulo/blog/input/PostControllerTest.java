@@ -3,6 +3,7 @@ package dev.vitorpaulo.blog.input;
 import dev.vitorpaulo.blog.common.dto.GenericPageableRequest;
 import dev.vitorpaulo.blog.common.dto.GenericPageableResponse;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
+import dev.vitorpaulo.blog.input.mapper.AudioInputMapper;
 import dev.vitorpaulo.blog.input.mapper.PostInputMapper;
 import dev.vitorpaulo.blog.input.mapper.ReactionInputMapper;
 import dev.vitorpaulo.blog.input.request.CreatePostRequest;
@@ -11,12 +12,15 @@ import dev.vitorpaulo.blog.input.request.MassDeleteRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
 import dev.vitorpaulo.blog.input.request.ReactToRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
+import dev.vitorpaulo.blog.input.response.AudioResponse;
 import dev.vitorpaulo.blog.input.response.PostResponse;
 import dev.vitorpaulo.blog.input.response.ReactionResponse;
 import dev.vitorpaulo.blog.model.*;
+import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.output.post.PostOutput;
+import dev.vitorpaulo.blog.usecase.audio.RetryPostAudioUseCase;
 import dev.vitorpaulo.blog.usecase.post.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -60,6 +64,8 @@ class PostControllerTest {
     @Mock private ReactToRequest reactToRequest;
     @Mock private ReactionModel reactionModel;
     @Mock private ReactionResponse reactionResponse;
+    @Mock private RetryPostAudioUseCase retryPostAudioUseCase;
+    @Mock private AudioInputMapper audioInputMapper;
 
     @InjectMocks
     private PostController postController;
@@ -181,5 +187,19 @@ class PostControllerTest {
         var result = postController.getFeatured(Language.ENGLISH);
 
         assertEquals(List.of(postResponse, anotherResponse), result);
+    }
+
+    @Test
+    void retry_returnsUpdatedResponse() {
+        var postId = UUID.randomUUID();
+        var model = new AudioModel(AudioType.NARRATION, Language.ENGLISH, AudioStatus.QUEUED, "post/audio/1/k.wav", null, null);
+        var response = new AudioResponse(AudioType.NARRATION, Language.ENGLISH, AudioStatus.QUEUED, "post/audio/1/k.wav", null, null);
+        when(retryPostAudioUseCase.execute(postId, AudioType.NARRATION, Language.ENGLISH)).thenReturn(model);
+        when(audioInputMapper.toResponse(model)).thenReturn(response);
+
+        var result = postController.retry(postId, AudioType.NARRATION, Language.ENGLISH);
+
+        assertEquals(response, result);
+        verify(retryPostAudioUseCase).execute(postId, AudioType.NARRATION, Language.ENGLISH);
     }
 }

@@ -12,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -24,17 +25,18 @@ class GetPostByIdUseCaseTest {
     private GetPostByIdUseCase getPostByIdUseCase;
 
     @Test
-    void execute_found_returnsPost() {
+    void execute_found_returnsPostWithAudio() {
         var id = UUID.randomUUID();
         when(postOutput.findById(id)).thenReturn(expected);
 
         var result = getPostByIdUseCase.execute(id);
 
         assertEquals(expected, result);
+        verify(postOutput).findById(id);
     }
 
     @Test
-    void execute_notFound_throwsNotFoundException() {
+    void execute_notFound_propagatesNotFoundException() {
         when(postOutput.findById(any())).thenThrow(new NotFoundException());
 
         assertThrows(NotFoundException.class, () -> getPostByIdUseCase.execute(UUID.randomUUID()));

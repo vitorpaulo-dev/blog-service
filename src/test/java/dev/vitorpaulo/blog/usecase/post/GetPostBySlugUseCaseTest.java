@@ -11,6 +11,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -23,7 +25,7 @@ class GetPostBySlugUseCaseTest {
     private GetPostBySlugUseCase getPostBySlugUseCase;
 
     @Test
-    void execute_validSlug_returnsPost() {
+    void execute_validSlug_returnsPostWithUserLanguageAudio() {
         when(postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "203.0.113.7")).thenReturn(expected);
 
         var result = getPostBySlugUseCase.execute("my-post", Language.ENGLISH, "203.0.113.7");
@@ -33,7 +35,7 @@ class GetPostBySlugUseCaseTest {
     }
 
     @Test
-    void execute_notFound_throwsNotFoundException() {
+    void execute_notFound_propagatesNotFoundException() {
         when(postOutput.findBySlugAndIncrementView(anyString(), any(), anyString())).thenThrow(new NotFoundException());
 
         assertThrows(NotFoundException.class,

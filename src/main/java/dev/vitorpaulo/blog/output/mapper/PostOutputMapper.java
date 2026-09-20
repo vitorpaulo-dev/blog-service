@@ -2,10 +2,8 @@ package dev.vitorpaulo.blog.output.mapper;
 
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
-import dev.vitorpaulo.blog.model.Language;
-import dev.vitorpaulo.blog.model.PostContentModel;
-import dev.vitorpaulo.blog.model.PostModel;
-import dev.vitorpaulo.blog.model.ReactionModel;
+import dev.vitorpaulo.blog.model.*;
+import dev.vitorpaulo.blog.model.audio.AudioModel;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -23,7 +21,7 @@ import java.util.stream.Collectors;
 public interface PostOutputMapper {
 
 	@Mapping(target = "translations", expression = "java(contentsToTranslations(entity.getContents()))")
-	PostModel toModel(PostEntity entity, List<UUID> projectIds, List<UUID> tagIds);
+	PostModel toModel(PostEntity entity, List<UUID> projectIds, List<UUID> tagIds, Map<AudioType, Map<Language, AudioModel>> audio);
 
 	ReactionModel toReactionModel(PostEntity entity);
 

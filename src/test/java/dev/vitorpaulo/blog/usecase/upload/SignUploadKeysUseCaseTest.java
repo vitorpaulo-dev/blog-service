@@ -53,6 +53,7 @@ class SignUploadKeysUseCaseTest {
 	@Test
 	void eachFolderIsAllowed() {
 		when(storageOutput.signKeys(List.of(
+			"post/audio/post-id/NARRATION-ENGLISH.wav",
 			"post/banner/a.jpg",
 			"post/content/b.jpg",
 			"project/logo/c.png",
@@ -61,6 +62,7 @@ class SignUploadKeysUseCaseTest {
 		))).thenReturn(List.of());
 
 		useCase.execute(List.of(
+			"post/audio/post-id/NARRATION-ENGLISH.wav",
 			"post/banner/a.jpg",
 			"post/content/b.jpg",
 			"project/logo/c.png",
@@ -69,6 +71,7 @@ class SignUploadKeysUseCaseTest {
 		));
 
 		verify(storageOutput).signKeys(List.of(
+			"post/audio/post-id/NARRATION-ENGLISH.wav",
 			"post/banner/a.jpg",
 			"post/content/b.jpg",
 			"project/logo/c.png",

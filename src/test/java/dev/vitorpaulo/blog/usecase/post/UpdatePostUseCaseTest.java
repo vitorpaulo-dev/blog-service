@@ -52,5 +52,6 @@ class UpdatePostUseCaseTest {
         var result = updatePostUseCase.execute(post, null, null, author);
 
         assertEquals(updatedPost, result);
+        verify(postOutput).update(post, null, null, author);
     }
 }

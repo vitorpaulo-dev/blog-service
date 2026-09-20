@@ -3,6 +3,7 @@ package dev.vitorpaulo.blog.input;
 import dev.vitorpaulo.blog.common.dto.GenericPageableResponse;
 import dev.vitorpaulo.blog.config.captcha.ValidateCaptcha;
 import dev.vitorpaulo.blog.config.security.CurrentAuthor;
+import dev.vitorpaulo.blog.input.mapper.AudioInputMapper;
 import dev.vitorpaulo.blog.input.mapper.PostInputMapper;
 import dev.vitorpaulo.blog.input.mapper.ReactionInputMapper;
 import dev.vitorpaulo.blog.input.request.CreatePostRequest;
@@ -12,11 +13,14 @@ import dev.vitorpaulo.blog.common.dto.GenericPageableRequest;
 import dev.vitorpaulo.blog.input.request.PostQueryRequest;
 import dev.vitorpaulo.blog.input.request.ReactToRequest;
 import dev.vitorpaulo.blog.input.request.UpdatePostRequest;
+import dev.vitorpaulo.blog.input.response.AudioResponse;
 import dev.vitorpaulo.blog.input.response.PostResponse;
 import dev.vitorpaulo.blog.input.response.ReactionResponse;
+import dev.vitorpaulo.blog.model.AudioType;
 import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.output.post.PostOutput;
+import dev.vitorpaulo.blog.usecase.audio.RetryPostAudioUseCase;
 import dev.vitorpaulo.blog.usecase.post.CreatePostUseCase;
 import dev.vitorpaulo.blog.usecase.post.DeletePostUseCase;
 import dev.vitorpaulo.blog.usecase.post.GetFeaturedPostsUseCase;
@@ -54,6 +58,8 @@ public class PostController {
 
     private final PostInputMapper postInputMapper;
     private final ReactionInputMapper reactionInputMapper;
+    private final AudioInputMapper audioInputMapper;
+    private final RetryPostAudioUseCase retryPostAudioUseCase;
     private final PostOutput postOutput;
 
     @PostMapping
@@ -109,5 +115,10 @@ public class PostController {
     public GenericPageableResponse<PostResponse> search(@Valid @RequestBody GenericPageableRequest<PostQueryRequest> request, @CurrentAuthor AuthorModel author) {
         final var result = searchPostUseCase.execute(postInputMapper.toPageableInput(request), author);
         return postInputMapper.toPageableResponse(result);
+    }
+
+    @PostMapping("/{postId}/audio/{type}/{language}/retry")
+    public AudioResponse retry(@PathVariable UUID postId, @PathVariable AudioType type, @PathVariable Language language) {
+        return audioInputMapper.toResponse(retryPostAudioUseCase.execute(postId, type, language));
     }
 }

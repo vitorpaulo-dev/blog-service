@@ -52,5 +52,6 @@ class CreatePostUseCaseTest {
         var result = createPostUseCase.execute(post, null, null, author);
 
         assertEquals(savedPost, result);
+        verify(postOutput).save(post, null, null, author);
     }
 }

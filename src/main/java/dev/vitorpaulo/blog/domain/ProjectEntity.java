@@ -76,19 +76,19 @@ public class ProjectEntity {
     private OffsetDateTime updatedAt;
 
     @Column(name = "view_count", nullable = false)
-    private Long viewCount;
+    private Long viewCount = 0L;
 
     @Column(name = "love_count", nullable = false)
-    private Long loveCount;
+    private Long loveCount = 0L;
 
     @Column(name = "celebrate_count", nullable = false)
-    private Long celebrateCount;
+    private Long celebrateCount = 0L;
 
     @Column(name = "genius_count", nullable = false)
-    private Long geniusCount;
+    private Long geniusCount = 0L;
 
     @Column(name = "help_count", nullable = false)
-    private Long helpCount;
+    private Long helpCount = 0L;
 
     @Formula("""
         love_count
