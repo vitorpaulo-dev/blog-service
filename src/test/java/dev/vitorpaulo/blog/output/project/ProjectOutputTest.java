@@ -408,14 +408,14 @@ class ProjectOutputTest {
     }
 
     @Test
-    void deleteAll_missingOrForeignId_throwsNotFoundWithoutDeleting() {
+    void deleteAll_missingOrForeignId_deletesResolvableEntitiesOnly() {
         var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
         when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(projectRepository.findAllByIdWithAuthor(ids, author.id(), true)).thenReturn(List.of(projectEntity));
 
-        var ex = assertThrows(NotFoundException.class, () -> projectOutput.deleteAll(ids, author));
-        assertEquals(ExceptionCode.PROJECT_NOT_FOUND, ex.getCode());
-        verify(projectRepository, never()).deleteAll(anyList());
+        projectOutput.deleteAll(ids, author);
+
+        verify(projectRepository).deleteAll(List.of(projectEntity));
     }
 
     @Test

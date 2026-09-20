@@ -97,6 +97,25 @@ class SecurityFilterChainTest {
 			.andExpect(status().isUnauthorized());
 	}
 
+	@Test
+	void uploadSignAnonymous_returnsOk() throws Exception {
+		mockMvc.perform(post("/v1/upload/sign"))
+			.andExpect(status().isOk());
+	}
+
+	@Test
+	void uploadOtherAnonymous_returnsUnauthorized() throws Exception {
+		mockMvc.perform(post("/v1/upload/presign"))
+			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void uploadOtherMember_returnsOk() throws Exception {
+		stubToken("member-token", jwtWithClaim("org:member"));
+		mockMvc.perform(post("/v1/upload/presign").header("Authorization", "Bearer member-token"))
+			.andExpect(status().isOk());
+	}
+
 	private Jwt jwtWithClaim(String role) {
 		return Jwt.withTokenValue("token")
 			.header("alg", "none")
@@ -126,6 +145,16 @@ class SecurityFilterChainTest {
 
 		@GetMapping("/actuator/flyway")
 		ResponseEntity<Void> flyway() {
+			return ResponseEntity.ok().build();
+		}
+
+		@PostMapping("/v1/upload/sign")
+		ResponseEntity<Void> uploadSign() {
+			return ResponseEntity.ok().build();
+		}
+
+		@PostMapping("/v1/upload/presign")
+		ResponseEntity<Void> uploadPresign() {
 			return ResponseEntity.ok().build();
 		}
 	}

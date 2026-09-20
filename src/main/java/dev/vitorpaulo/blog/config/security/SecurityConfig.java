@@ -35,7 +35,7 @@ public class SecurityConfig {
 		HttpSecurity http,
 		JwtAuthenticationConverter jwtAuthenticationConverter,
 		FindOrCreateAuthorUseCase findOrCreateAuthorUseCase
-	) throws Exception {
+	) {
 		http
 			.csrf(AbstractHttpConfigurer::disable)
 			.cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -64,6 +64,7 @@ public class SecurityConfig {
 				.requestMatchers("/v1/tag/**").authenticated()
 				.requestMatchers("/v1/newsletter/subscriber/**").authenticated()
 				.requestMatchers("/v1/dashboard/**").authenticated()
+				.requestMatchers(HttpMethod.POST, "/v1/upload/sign").permitAll()
 				.requestMatchers("/v1/upload/**").authenticated()
 				.anyRequest().authenticated()
 			)

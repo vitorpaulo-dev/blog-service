@@ -186,9 +186,6 @@ public class PostOutput {
     @Transactional
     public void deleteAll(List<UUID> ids, AuthorModel author) {
         final var entities = postRepository.findAllByIdWithAuthor(ids, author.id(), authorRoleChecker.isAdmin());
-        if (entities.size() != Set.copyOf(ids).size()) {
-            throw new NotFoundException(ExceptionCode.POST_NOT_FOUND);
-        }
         postRepository.deleteAll(entities);
     }
 

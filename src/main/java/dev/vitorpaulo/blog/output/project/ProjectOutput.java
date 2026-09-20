@@ -148,9 +148,6 @@ public class ProjectOutput {
 	@Transactional
 	public void deleteAll(List<UUID> ids, AuthorModel author) {
 		final var entities = projectRepository.findAllByIdWithAuthor(ids, author.id(), authorRoleChecker.isAdmin());
-		if (entities.size() != Set.copyOf(ids).size()) {
-			throw new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND);
-		}
 		projectRepository.deleteAll(entities);
 	}
 

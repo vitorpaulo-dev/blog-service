@@ -387,14 +387,14 @@ class PostOutputTest {
     }
 
     @Test
-    void deleteAll_missingOrForeignId_throwsNotFoundWithoutDeleting() {
+    void deleteAll_missingOrForeignId_deletesResolvableEntitiesOnly() {
         var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
         when(authorRoleChecker.isAdmin()).thenReturn(true);
         when(postRepository.findAllByIdWithAuthor(ids, author.id(), true)).thenReturn(List.of(postEntity));
 
-        var ex = assertThrows(NotFoundException.class, () -> postOutput.deleteAll(ids, author));
-        assertEquals(ExceptionCode.POST_NOT_FOUND, ex.getCode());
-        verify(postRepository, never()).deleteAll(anyList());
+        postOutput.deleteAll(ids, author);
+
+        verify(postRepository).deleteAll(List.of(postEntity));
     }
 
     @Test

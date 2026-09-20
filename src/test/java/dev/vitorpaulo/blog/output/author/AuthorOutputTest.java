@@ -92,27 +92,24 @@ class AuthorOutputTest {
     }
 
     @Test
-    void getAuthor_membershipLookupFails_fallsBackToJwtOrgRole() {
+    void getAuthor_membershipLookupFails_defaultsToMemberRole() {
         when(clerk.organizationMemberships().list(any(ListOrganizationMembershipsRequest.class)))
             .thenThrow(new RuntimeException("clerk down"));
 
-        var model = new AuthorModel(authorId, "Vitor", null, null, null, "org:admin");
-        when(authorOutputMapper.toModel(authorEntity, "org:admin")).thenReturn(model);
+        var model = new AuthorModel(authorId, "Vitor", null, null, null, AuthorRoleMapper.MEMBER_CLERK_ROLE);
+        when(authorOutputMapper.toModel(authorEntity, AuthorRoleMapper.MEMBER_CLERK_ROLE)).thenReturn(model);
 
         assertEquals(model, authorOutput.getAuthor(adminJwt));
     }
 
     @Test
-    void getAuthor_noMembershipAndNoClaim_defaultsToMemberRole() {
+    void getAuthor_noMembership_defaultsToMemberRole() {
         stubMembership(Optional.of(stubMembershipResponse(List.of())));
 
         var model = new AuthorModel(authorId, "Vitor", null, null, null, AuthorRoleMapper.MEMBER_CLERK_ROLE);
         when(authorOutputMapper.toModel(authorEntity, AuthorRoleMapper.MEMBER_CLERK_ROLE)).thenReturn(model);
 
-        var rolelessJwt = new Jwt("raw", Instant.now(), Instant.now().plusSeconds(3600),
-            Map.of("alg", "RS256"), Map.of("sub", "user_sub"));
-
-        assertEquals(model, authorOutput.getAuthor(rolelessJwt));
+        assertEquals(model, authorOutput.getAuthor(adminJwt));
     }
 
     private void stubMembership(Optional<OrganizationMemberships> memberships) {
