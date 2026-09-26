@@ -35,6 +35,13 @@ public interface TagRepository extends JpaRepository<TagEntity, UUID> {
 		SELECT t
 		FROM TagEntity t
 		JOIN FETCH t.contents c
+		WHERE cast(:name as string) IS NULL
+			OR EXISTS (
+				SELECT tc FROM TagContentEntity tc
+				WHERE tc.tag = t
+					AND tc.language = :language
+					AND lower(tc.name) LIKE lower(concat('%', cast(:name as string), '%'))
+			)
 	""")
 	Page<TagEntity> search(
 		String name,
