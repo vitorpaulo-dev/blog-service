@@ -19,7 +19,6 @@ import dev.vitorpaulo.blog.input.response.ReactionResponse;
 import dev.vitorpaulo.blog.model.AudioType;
 import dev.vitorpaulo.blog.model.AuthorModel;
 import dev.vitorpaulo.blog.model.Language;
-import dev.vitorpaulo.blog.output.post.PostOutput;
 import dev.vitorpaulo.blog.usecase.audio.RetryPostAudioUseCase;
 import dev.vitorpaulo.blog.usecase.post.CreatePostUseCase;
 import dev.vitorpaulo.blog.usecase.post.DeletePostUseCase;
@@ -32,6 +31,7 @@ import dev.vitorpaulo.blog.usecase.post.SetPostFeaturedWeightsUseCase;
 import dev.vitorpaulo.blog.usecase.post.UpdatePostUseCase;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
@@ -60,7 +60,6 @@ public class PostController {
     private final ReactionInputMapper reactionInputMapper;
     private final AudioInputMapper audioInputMapper;
     private final RetryPostAudioUseCase retryPostAudioUseCase;
-    private final PostOutput postOutput;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -100,7 +99,7 @@ public class PostController {
 
     @PostMapping("/featured")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void setFeatured(@RequestBody List<FeaturedPostRequest> request, @CurrentAuthor AuthorModel author) {
+    public void setFeatured(@Valid @RequestBody List<@Valid @NotNull FeaturedPostRequest> request, @CurrentAuthor AuthorModel author) {
         setPostFeaturedWeightsUseCase.execute(postInputMapper.toFeaturedModels(request), author);
     }
 

@@ -56,12 +56,13 @@ public class SubscriberOutput {
 
     public PaginatedOutput<SubscriberModel> search(PaginatedInput<SubscriberQueryModel> input) {
         final var query = input.query();
-        final var pageable = PageRequest.of(input.page(), input.size(), Sort.by(input.direction(), mapSortProperty(input.sort())));
+        final var pageable = PageRequest.of(input.page(), input.size(), Sort.by(
+            input.direction() != null ? input.direction() : Sort.Direction.ASC, mapSortProperty(input.sort())));
         final var result = subscriberRepository.search(
-            query.email(),
-            query.status(),
-            query.language(),
-            query.frequency(),
+            query != null ? query.email() : null,
+            query != null ? query.status() : null,
+            query != null ? query.language() : null,
+            query != null ? query.frequency() : null,
             pageable
         );
 

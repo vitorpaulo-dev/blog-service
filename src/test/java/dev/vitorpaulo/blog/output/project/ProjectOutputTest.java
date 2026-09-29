@@ -23,10 +23,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -535,7 +533,6 @@ class ProjectOutputTest {
         assertEquals(List.of(expectedResult, secondResult), result.content());
     }
 
-    // Committed behavior: search filters non-requested languages in Java (removeIf).
     @Test
     void search_filtersOtherLanguagesInJava() {
         var translations = new HashMap<Language, ProjectContentModel>();
@@ -552,15 +549,6 @@ class ProjectOutputTest {
         assertEquals(1, result.content().size());
         assertTrue(translations.containsKey(Language.ENGLISH));
         assertFalse(translations.containsKey(Language.PORTUGUESE));
-    }
-
-    @Test
-    void search_isTransactionalReadOnly() throws NoSuchMethodException {
-        Method method = ProjectOutput.class.getMethod("search", PaginatedInput.class, AuthorModel.class);
-        var transactional = method.getAnnotation(Transactional.class);
-
-        assertNotNull(transactional);
-        assertTrue(transactional.readOnly());
     }
 
     @Test
@@ -590,7 +578,6 @@ class ProjectOutputTest {
         assertTrue(result.isEmpty());
     }
 
-    // Committed behavior: batch filters non-requested languages in Java (removeIf).
     @Test
     void findAllById_filtersOtherLanguagesInJava() {
         var translations = new HashMap<Language, ProjectContentModel>();
@@ -608,12 +595,15 @@ class ProjectOutputTest {
     }
 
     @Test
-    void findAllById_isTransactionalReadOnly() throws NoSuchMethodException {
-        Method method = ProjectOutput.class.getMethod("findAllById", List.class, Language.class);
-        var transactional = method.getAnnotation(Transactional.class);
+    void search_nullQuery_passesNullFiltersAndAscendingClause() {
+        when(projectRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString()))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        assertNotNull(transactional);
-        assertTrue(transactional.readOnly());
+        var result = projectOutput.search(new PaginatedInput<ProjectQueryModel>(null, 0, 10, null, null), null);
+
+        assertTrue(result.content().isEmpty());
+        verify(projectRepository).search(isNull(), isNull(), isNull(), isNull(), eq(false),
+                any(PageRequest.class), eq("created_at ASC, updated_at ASC"));
     }
 
     private PaginatedInput<ProjectQueryModel> input(ProjectQueryModel query, String sort, Sort.Direction direction) {

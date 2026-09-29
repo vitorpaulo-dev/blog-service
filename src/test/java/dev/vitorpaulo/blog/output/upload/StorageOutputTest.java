@@ -4,6 +4,9 @@ import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.model.upload.SignedUrlModel;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -22,40 +25,42 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.argThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class StorageOutputTest {
 
-	private final S3Presigner presigner = mock(S3Presigner.class);
-	private final S3Presigner uploader = mock(S3Presigner.class);
+	@Mock private S3Presigner presigner;
+	@Mock private S3Presigner uploader;
+	@Mock private S3Client s3Deleter;
+	@Mock private PresignedPutObjectRequest presignedPut;
+	@Mock private PresignedGetObjectRequest presignedGet;
+
+	private static final Duration GET_EXPIRY = Duration.ofHours(1);
+	private static final Duration PUT_EXPIRY = Duration.ofMinutes(15);
 
 	@Test
 	void presignUpload_buildsUuidKeyWithExtension() throws Exception {
-		final var presigned = mock(PresignedPutObjectRequest.class);
-		when(presigned.url()).thenReturn(URI.create("https://r2.example/signed-put").toURL());
-		when(uploader.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
+		when(presignedPut.url()).thenReturn(URI.create("https://r2.example/signed-put").toURL());
+		when(uploader.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presignedPut);
 
-		final var output = output(Optional.of(presigner), Optional.of(uploader));
+		final var output = output(Optional.of(presigner), Optional.of(uploader), Optional.of(s3Deleter));
 		final var result = output.presignUpload("post", "banner", "my Picture.JPEG");
 
 		assertTrue(result.key().matches("^post/banner/[0-9a-f-]{36}\\.jpeg$"));
 		assertEquals("https://r2.example/signed-put", result.url());
-		verify(uploader).presignPutObject(argThat((PutObjectPresignRequest request) -> {
-			assertEquals("test-bucket", request.putObjectRequest().bucket());
-			assertEquals(Duration.ofMinutes(15), request.signatureDuration());
-			return true;
-		}));
+		verify(uploader).presignPutObject(argThat((PutObjectPresignRequest request) ->
+			"test-bucket".equals(request.putObjectRequest().bucket())
+				&& PUT_EXPIRY.equals(request.signatureDuration())));
 	}
 
 	@Test
 	void presignUpload_fileNameWithoutExtension_keepsKeyExtensionless() throws Exception {
-		final var presigned = mock(PresignedPutObjectRequest.class);
-		when(presigned.url()).thenReturn(URI.create("https://r2.example/signed-put").toURL());
-		when(uploader.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
+		when(presignedPut.url()).thenReturn(URI.create("https://r2.example/signed-put").toURL());
+		when(uploader.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presignedPut);
 
-		final var output = output(Optional.of(presigner), Optional.of(uploader));
+		final var output = output(Optional.of(presigner), Optional.of(uploader), Optional.of(s3Deleter));
 		final var result = output.presignUpload("project", "logo", "noext");
 
 		assertTrue(result.key().matches("^project/logo/[0-9a-f-]{36}$"));
@@ -63,11 +68,10 @@ class StorageOutputTest {
 
 	@Test
 	void signKeys_presignsGetWithHourExpiry() throws Exception {
-		final var presigned = mock(PresignedGetObjectRequest.class);
-		when(presigned.url()).thenReturn(URI.create("https://r2.example/signed-get").toURL());
-		when(presigner.presignGetObject(any(GetObjectPresignRequest.class))).thenReturn(presigned);
+		when(presignedGet.url()).thenReturn(URI.create("https://r2.example/signed-get").toURL());
+		when(presigner.presignGetObject(any(GetObjectPresignRequest.class))).thenReturn(presignedGet);
 
-		final var output = output(Optional.of(presigner), Optional.of(uploader));
+		final var output = output(Optional.of(presigner), Optional.of(uploader), Optional.of(s3Deleter));
 		final List<SignedUrlModel> result = output.signKeys(List.of("post/content/a.png"));
 
 		assertEquals(1, result.size());
@@ -76,12 +80,12 @@ class StorageOutputTest {
 		verify(presigner).presignGetObject(argThat((GetObjectPresignRequest request) ->
 			"test-bucket".equals(request.getObjectRequest().bucket())
 				&& "post/content/a.png".equals(request.getObjectRequest().key())
-				&& Duration.ofHours(1).equals(request.signatureDuration())));
+				&& GET_EXPIRY.equals(request.signatureDuration())));
 	}
 
 	@Test
 	void missingPresigner_throwsUploadFailed() throws Exception {
-		final var output = output(Optional.empty(), Optional.empty());
+		final var output = output(Optional.empty(), Optional.empty(), Optional.empty());
 
 		final var uploadException = assertThrows(BusinessException.class, () -> output.presignUpload("post", "banner", "a.png"));
 		final var signException = assertThrows(BusinessException.class, () -> output.signKeys(List.of("post/banner/a.png")));
@@ -92,11 +96,10 @@ class StorageOutputTest {
 
 	@Test
 	void missingUploader_throwsUploadFailedOnPresign() throws Exception {
-		final var presigned = mock(PresignedGetObjectRequest.class);
-		when(presigned.url()).thenReturn(URI.create("https://r2.example/signed-get").toURL());
-		when(presigner.presignGetObject(any(GetObjectPresignRequest.class))).thenReturn(presigned);
+		when(presignedGet.url()).thenReturn(URI.create("https://r2.example/signed-get").toURL());
+		when(presigner.presignGetObject(any(GetObjectPresignRequest.class))).thenReturn(presignedGet);
 
-		final var output = output(Optional.of(presigner), Optional.empty());
+		final var output = output(Optional.of(presigner), Optional.empty(), Optional.of(s3Deleter));
 
 		final var uploadException = assertThrows(BusinessException.class, () -> output.presignUpload("post", "banner", "a.png"));
 
@@ -106,12 +109,10 @@ class StorageOutputTest {
 
 	@Test
 	void delete_removesObjectFromBucket() throws Exception {
-		final var deleter = mock(S3Client.class);
-
-		final var output = output(Optional.of(presigner), Optional.of(uploader), Optional.of(deleter));
+		final var output = output(Optional.of(presigner), Optional.of(uploader), Optional.of(s3Deleter));
 		output.delete("post/audio/abc/podcast.wav");
 
-		verify(deleter).deleteObject(argThat((DeleteObjectRequest request) ->
+		verify(s3Deleter).deleteObject(argThat((DeleteObjectRequest request) ->
 			"test-bucket".equals(request.bucket()) && "post/audio/abc/podcast.wav".equals(request.key())));
 	}
 
@@ -122,11 +123,6 @@ class StorageOutputTest {
 		final var exception = assertThrows(BusinessException.class, () -> output.delete("post/audio/abc/podcast.wav"));
 
 		assertEquals(ExceptionCode.UPLOAD_FAILED, exception.getCode());
-	}
-
-	private StorageOutput output(Optional<S3Presigner> readPresigner, Optional<S3Presigner> uploadPresigner)
-		throws NoSuchFieldException, IllegalAccessException {
-		return output(readPresigner, uploadPresigner, Optional.empty());
 	}
 
 	private StorageOutput output(Optional<S3Presigner> readPresigner, Optional<S3Presigner> uploadPresigner,

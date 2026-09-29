@@ -35,6 +35,7 @@ import java.util.EnumMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -60,6 +61,18 @@ public class AudioOutput {
 		return audioRepository.findByPostId(postId).stream()
 			.map(this::toModel)
 			.toList();
+	}
+
+	@Transactional
+	public void deleteArtifacts(List<UUID> postIds) {
+		final var artifacts = audioRepository.findByPostIdIn(postIds);
+
+		artifacts.stream()
+			.map(AudioEntity::getR2Key)
+			.filter(Objects::nonNull)
+			.forEach(storageOutput::delete);
+
+		audioRepository.deleteAll(artifacts);
 	}
 
 	@Transactional
@@ -127,11 +140,11 @@ public class AudioOutput {
 		final var uploads = new EnumMap<AudioType, Map<Language, String>>(AudioType.class);
 
 		for (var type : AudioType.values()) {
-			for (var language : Language.values()) {
-				renewIfChanged(post.getId(), type, language, hashes.get(language))
+			for (var entry : hashes.entrySet()) {
+				renewIfChanged(post.getId(), type, entry.getKey(), entry.getValue())
 					.ifPresent(url -> uploads
 						.computeIfAbsent(type, ignored -> new EnumMap<>(Language.class))
-						.put(language, url));
+						.put(entry.getKey(), url));
 			}
 		}
 
@@ -184,8 +197,8 @@ public class AudioOutput {
 
 	private Map<Language, String> contentHashes(PostEntity post) {
 		final var hashes = new EnumMap<Language, String>(Language.class);
-		for (var language : Language.values()) {
-			hashes.put(language, contentHashFor(post, language));
+		for (var content : post.getContents()) {
+			hashes.put(content.getLanguage(), contentHash(content.getTitle(), content.getContent()));
 		}
 
 		return hashes;

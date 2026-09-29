@@ -1,9 +1,7 @@
 package dev.vitorpaulo.blog.usecase.tag;
 
 import dev.vitorpaulo.blog.model.Language;
-import dev.vitorpaulo.blog.model.ProjectModel;
 import dev.vitorpaulo.blog.model.TagModel;
-import dev.vitorpaulo.blog.output.project.ProjectOutput;
 import dev.vitorpaulo.blog.output.tag.TagOutput;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

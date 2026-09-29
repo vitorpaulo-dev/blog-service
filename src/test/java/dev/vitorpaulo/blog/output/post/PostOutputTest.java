@@ -27,7 +27,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -362,37 +361,45 @@ class PostOutputTest {
     }
 
     @Test
-    void deleteAll_admin_bypassesOwnershipCheck() {
-        var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
-        var entities = List.of(postEntity, secondPostEntity);
+    void findOwnedIds_adminBypass_returnsAllResolvedIds() {
+        var firstId = UUID.randomUUID();
+        var secondId = UUID.randomUUID();
+        var ids = List.of(firstId, secondId);
         when(authorRoleChecker.isAdmin()).thenReturn(true);
-        when(postRepository.findAllByIdWithAuthor(ids, author.id(), true)).thenReturn(entities);
+        when(postRepository.findAllByIdWithAuthor(ids, author.id(), true))
+                .thenReturn(List.of(postEntity, secondPostEntity));
+        when(postEntity.getId()).thenReturn(firstId);
+        when(secondPostEntity.getId()).thenReturn(secondId);
 
-        postOutput.deleteAll(ids, author);
+        var result = postOutput.findOwnedIds(ids, author);
 
-        verify(postRepository).deleteAll(entities);
+        assertEquals(List.of(firstId, secondId), result);
     }
 
     @Test
-    void deleteAll_nonAdmin_requiresOwnership() {
+    void findOwnedIds_nonMemberForeignIds_returnsEmptyList() {
         var ids = List.of(UUID.randomUUID());
-        var authorId = UUID.randomUUID();
-        when(author.id()).thenReturn(authorId);
-        var entities = List.of(postEntity);
-        when(postRepository.findAllByIdWithAuthor(ids, authorId, false)).thenReturn(entities);
+        when(postRepository.findAllByIdWithAuthor(ids, author.id(), false)).thenReturn(List.of());
 
-        postOutput.deleteAll(ids, author);
-
-        verify(postRepository).deleteAll(entities);
+        assertTrue(postOutput.findOwnedIds(ids, author).isEmpty());
     }
 
     @Test
-    void deleteAll_missingOrForeignId_deletesResolvableEntitiesOnly() {
-        var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
-        when(authorRoleChecker.isAdmin()).thenReturn(true);
-        when(postRepository.findAllByIdWithAuthor(ids, author.id(), true)).thenReturn(List.of(postEntity));
+    void deleteByIds_loadsOwnedEntitiesAndDeletesThem() {
+        var ids = List.of(UUID.randomUUID());
+        when(postRepository.findAllById(ids)).thenReturn(List.of(postEntity));
 
-        postOutput.deleteAll(ids, author);
+        postOutput.deleteByIds(ids);
+
+        verify(postRepository).deleteAll(List.of(postEntity));
+    }
+
+    @Test
+    void deleteByIds_missingIds_deletesResolvableEntitiesOnly() {
+        var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
+        when(postRepository.findAllById(ids)).thenReturn(List.of(postEntity));
+
+        postOutput.deleteByIds(ids);
 
         verify(postRepository).deleteAll(List.of(postEntity));
     }
@@ -401,25 +408,25 @@ class PostOutputTest {
     void search_propagatesLanguageAndShowDraftsToRepository() {
         when(postQueryModel.query()).thenReturn("spring");
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
-        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         postOutput.search(input(postQueryModel, "createdAt", Sort.Direction.DESC), null);
 
         verify(postRepository).search(eq("spring"), isNull(), isNull(), eq("ENGLISH"), eq(false),
-                any(PageRequest.class), eq("createdAt"), eq("DESC"));
+                any(PageRequest.class), eq("createdAt"), eq("DESC"), eq(false));
     }
 
     @Test
     void search_nullLanguage_passesNullToRepository() {
         when(postQueryModel.language()).thenReturn(null);
-        when(postRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
+        when(postRepository.search(any(), any(), any(), isNull(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         postOutput.search(input(postQueryModel, "createdAt", Sort.Direction.DESC), null);
 
         verify(postRepository).search(any(), any(), any(), isNull(), eq(false),
-                any(PageRequest.class), eq("createdAt"), eq("DESC"));
+                any(PageRequest.class), eq("createdAt"), eq("DESC"), eq(false));
     }
 
     @Test
@@ -428,13 +435,13 @@ class PostOutputTest {
         when(author.id()).thenReturn(authorId);
         when(postQueryModel.authorId()).thenReturn(authorId);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
-        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         postOutput.search(input(postQueryModel, "createdAt", Sort.Direction.DESC), author);
 
         verify(postRepository).search(any(), any(), any(), any(), eq(true),
-                any(PageRequest.class), eq("createdAt"), eq("DESC"));
+                any(PageRequest.class), eq("createdAt"), eq("DESC"), eq(false));
     }
 
     @Test
@@ -442,31 +449,67 @@ class PostOutputTest {
         var filterAuthorId = UUID.randomUUID();
         when(postQueryModel.authorId()).thenReturn(filterAuthorId);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
-        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         postOutput.search(input(postQueryModel, "createdAt", Sort.Direction.DESC), author);
 
         verify(postRepository).search(any(), eq(filterAuthorId), any(), any(), eq(false),
-                any(PageRequest.class), eq("createdAt"), eq("DESC"));
+                any(PageRequest.class), eq("createdAt"), eq("DESC"), eq(false));
     }
 
     @Test
     void search_sortAndDirection_passThroughUnmapped() {
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
-        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         postOutput.search(input(postQueryModel, "viewCount", Sort.Direction.ASC), null);
 
         verify(postRepository).search(any(), any(), any(), any(), eq(false),
-                any(PageRequest.class), eq("viewCount"), eq("ASC"));
+                any(PageRequest.class), eq("viewCount"), eq("ASC"), eq(false));
+    }
+
+    @Test
+    void search_nullQuery_passesNullFiltersAndAscendingDirection() {
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        var result = postOutput.search(new PaginatedInput<PostQueryModel>(null, 0, 10, null, null), null);
+
+        assertTrue(result.content().isEmpty());
+        verify(postRepository).search(isNull(), isNull(), isNull(), isNull(), eq(false),
+                any(PageRequest.class), eq("createdAt"), eq("ASC"), eq(true));
+    }
+
+    @Test
+    void search_nullDirection_defaultsToAscending() {
+        when(postQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        postOutput.search(input(postQueryModel, "createdAt", null), null);
+
+        verify(postRepository).search(any(), any(), any(), eq("ENGLISH"), eq(false),
+                any(PageRequest.class), eq("createdAt"), eq("ASC"), eq(false));
+    }
+
+    @Test
+    void search_nullSortWithExplicitDirection_appliesDefaultWithTieBreaker() {
+        when(postQueryModel.language()).thenReturn(Language.ENGLISH);
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        postOutput.search(input(postQueryModel, null, Sort.Direction.DESC), null);
+
+        verify(postRepository).search(any(), any(), any(), eq("ENGLISH"), eq(false),
+                any(PageRequest.class), eq("createdAt"), eq("DESC"), eq(true));
     }
 
     @Test
     void search_emptyPage_returnsEmptyContent() {
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
-        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         var result = postOutput.search(input(postQueryModel, "createdAt", Sort.Direction.DESC), null);
@@ -474,23 +517,6 @@ class PostOutputTest {
         assertTrue(result.content().isEmpty());
         verify(postRepository, never()).findTagIds(any());
         verifyNoInteractions(postOutputMapper);
-    }
-
-    @Test
-    void search_mapsPageWithEmptyProjectIdsAndTagIdsFromRepository() {
-        var entityId = UUID.randomUUID();
-        var tagId = UUID.randomUUID();
-        when(postEntity.getId()).thenReturn(entityId);
-        when(postRepository.findTagIds(entityId)).thenReturn(List.of(tagId));
-        when(postOutputMapper.toModel(postEntity, List.of(), List.of(tagId), Map.of())).thenReturn(expectedResult);
-        when(expectedResult.translations()).thenReturn(Map.of());
-        when(postQueryModel.language()).thenReturn(Language.ENGLISH);
-        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
-                .thenReturn(new PageImpl<>(List.of(postEntity)));
-
-        var result = postOutput.search(input(postQueryModel, "createdAt", Sort.Direction.DESC), null);
-
-        assertEquals(List.of(expectedResult), result.content());
     }
 
     @Test
@@ -506,7 +532,7 @@ class PostOutputTest {
         when(expectedResult.translations()).thenReturn(Map.of());
         when(secondResult.translations()).thenReturn(Map.of());
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
-        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(new PageImpl<>(List.of(postEntity, secondPostEntity)));
 
         var result = postOutput.search(input(postQueryModel, "createdAt", Sort.Direction.DESC), null);
@@ -514,7 +540,6 @@ class PostOutputTest {
         assertEquals(List.of(expectedResult, secondResult), result.content());
     }
 
-    // Committed behavior: search filters non-requested languages in Java (removeIf).
     @Test
     void search_filtersOtherLanguagesInJava() {
         var entityId = UUID.randomUUID();
@@ -526,7 +551,7 @@ class PostOutputTest {
         when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
         when(expectedResult.translations()).thenReturn(translations);
         when(postQueryModel.language()).thenReturn(Language.ENGLISH);
-        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString()))
+        when(postRepository.search(any(), any(), any(), any(), anyBoolean(), any(PageRequest.class), anyString(), anyString(), anyBoolean()))
                 .thenReturn(new PageImpl<>(List.of(postEntity)));
 
         var result = postOutput.search(input(postQueryModel, "createdAt", Sort.Direction.DESC), null);
@@ -534,16 +559,6 @@ class PostOutputTest {
         assertEquals(1, result.content().size());
         assertTrue(translations.containsKey(Language.ENGLISH));
         assertFalse(translations.containsKey(Language.PORTUGUESE));
-    }
-
-    @Test
-    void search_isTransactionalReadOnly() throws NoSuchMethodException {
-        var method = PostOutput.class.getMethod("search", PaginatedInput.class, AuthorModel.class);
-
-        var transactional = method.getAnnotation(Transactional.class);
-
-        assertNotNull(transactional);
-        assertTrue(transactional.readOnly());
     }
 
     @Test

@@ -176,6 +176,21 @@ class SubscriberOutputTest {
         assertTrue(result.content().isEmpty());
     }
 
+    @Test
+    void search_nullQueryAndDirection_passesNullFiltersAndAscendingSort() {
+        var input = new PaginatedInput<SubscriberQueryModel>(null, 0, 10, null, null);
+        org.springframework.data.domain.Page<SubscriberEntity> page = new PageImpl<>(List.of());
+        when(subscriberRepository.search(org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.any(PageRequest.class)))
+            .thenReturn(page);
+
+        var result = subscriberOutput.search(input);
+
+        var captor = ArgumentCaptor.forClass(PageRequest.class);
+        org.mockito.Mockito.verify(subscriberRepository).search(org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(), captor.capture());
+        org.junit.jupiter.api.Assertions.assertTrue(captor.getValue().getSort().getOrderFor("createdAt").isAscending());
+        assertTrue(result.content().isEmpty());
+    }
+
     @SuppressWarnings("unchecked")
     private <T> T any() {
         return org.mockito.ArgumentMatchers.any();

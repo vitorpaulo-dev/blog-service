@@ -13,5 +13,7 @@ public interface AudioRepository extends JpaRepository<AudioEntity, UUID> {
 
     List<AudioEntity> findByPostId(UUID postId);
 
+    List<AudioEntity> findByPostIdIn(List<UUID> postIds);
+
     Optional<AudioEntity> findByPostIdAndTypeAndLanguage(UUID postId, AudioType type, Language language);
 }

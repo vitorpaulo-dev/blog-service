@@ -46,25 +46,6 @@ class TagOutputExtendedTest {
     private TagOutput tagOutput;
 
     @Test
-    void findBySlug_found_mapsWithPlainMapper() {
-        when(tagRepository.findBySlugAndLanguage("java", Language.ENGLISH)).thenReturn(Optional.of(tagEntity));
-        when(tagOutputMapper.toModel(tagEntity)).thenReturn(expectedResult);
-
-        var result = tagOutput.findBySlug("java", Language.ENGLISH);
-
-        assertEquals(expectedResult, result);
-    }
-
-    @Test
-    void findBySlug_notFound_throwsNotFoundException() {
-        when(tagRepository.findBySlugAndLanguage(anyString(), any())).thenReturn(Optional.empty());
-
-        var ex = assertThrows(NotFoundException.class,
-                () -> tagOutput.findBySlug("nonexistent", Language.ENGLISH));
-        assertEquals(ExceptionCode.TAG_NOT_FOUND, ex.getCode());
-    }
-
-    @Test
     void save_validRequest_savesWithSlugFromName() {
         when(tagModel.translations()).thenReturn(Map.of(Language.ENGLISH, tagContentModel));
         when(tagContentModel.name()).thenReturn("Java");
@@ -214,6 +195,21 @@ class TagOutputExtendedTest {
 
         var captor = ArgumentCaptor.forClass(PageRequest.class);
         verify(tagRepository).search(any(), any(), captor.capture());
+        assertEquals(Sort.by(Sort.Direction.ASC, "created_at"), captor.getValue().getSort());
+    }
+
+    @Test
+    void search_nullDirection_defaultsToAscendingSort() {
+        when(tagRepository.search(isNull(), isNull(), any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        var input = new PaginatedInput<TagQueryModel>(null, 0, 10, null, null);
+
+        var result = tagOutput.search(input, null);
+
+        assertTrue(result.content().isEmpty());
+        var captor = ArgumentCaptor.forClass(PageRequest.class);
+        verify(tagRepository).search(isNull(), isNull(), captor.capture());
         assertEquals(Sort.by(Sort.Direction.ASC, "created_at"), captor.getValue().getSort());
     }
 

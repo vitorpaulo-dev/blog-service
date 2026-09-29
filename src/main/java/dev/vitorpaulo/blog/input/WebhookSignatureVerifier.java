@@ -10,6 +10,8 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -18,6 +20,7 @@ public class WebhookSignatureVerifier {
 
     private static final String SECRET_PREFIX = "whsec_";
     private static final String SIGNATURE_VERSION_PREFIX = "v1,";
+    private static final Duration TIMESTAMP_TOLERANCE = Duration.ofMinutes(5);
 
     @Value("${resend.webhook.secret}")
     private String secret;
@@ -25,6 +28,10 @@ public class WebhookSignatureVerifier {
     public void verify(String body, String webhookId, String webhookTimestamp, String webhookSignature) {
         if (webhookId == null || webhookTimestamp == null || webhookSignature == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST);
+        }
+
+        if (!isTimestampFresh(webhookTimestamp)) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, ExceptionCode.WEBHOOK_SIGNATURE_INVALID, null);
         }
 
         final var signedContent = webhookId + "." + webhookTimestamp + "." + body;
@@ -40,6 +47,20 @@ public class WebhookSignatureVerifier {
         if (!valid) {
             throw new BusinessException(HttpStatus.FORBIDDEN, ExceptionCode.WEBHOOK_SIGNATURE_INVALID, null);
         }
+    }
+
+    private boolean isTimestampFresh(String webhookTimestamp) {
+        final long timestamp;
+        try {
+            timestamp = Long.parseLong(webhookTimestamp);
+        } catch (NumberFormatException exception) {
+            return false;
+        }
+
+        final var tolerance = TIMESTAMP_TOLERANCE.toSeconds();
+        final var now = Instant.now().getEpochSecond();
+
+        return timestamp >= now - tolerance && timestamp <= now + tolerance;
     }
 
     private byte[] hmacSha256(String content) {

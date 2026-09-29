@@ -13,12 +13,8 @@ import dev.vitorpaulo.blog.model.TagModel;
 import dev.vitorpaulo.blog.model.TagQueryModel;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
-import jakarta.validation.Valid;
-import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-import org.mapstruct.NullValueMappingStrategy;
-import org.mapstruct.NullValuePropertyMappingStrategy;
 
 import java.util.UUID;
 

@@ -86,7 +86,6 @@ class TagOutputTest {
         assertTrue(result.isEmpty());
     }
 
-    // Committed behavior: batch filters non-requested languages in Java (removeIf).
     @Test
     void findAllById_filtersOtherLanguagesInJava() {
         var translations = new HashMap<Language, dev.vitorpaulo.blog.model.TagContentModel>();

@@ -90,6 +90,6 @@ public class AuthorOutput {
         if (counter == 0) {
             return base;
         }
-        return base + "-" + counter + 1;
+        return base + "-" + (counter + 1);
     }
 }

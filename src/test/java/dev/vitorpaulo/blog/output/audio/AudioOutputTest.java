@@ -209,6 +209,49 @@ class AudioOutputTest {
     }
 
     @Test
+    void dispatch_singleLanguagePost_dispatchesOnlyPresentLanguage() {
+        var singleLanguagePost = new PostEntity();
+        singleLanguagePost.setId(postId);
+        singleLanguagePost.setSlug("my-post");
+        singleLanguagePost.setStatus(PostStatus.PUBLISHED);
+        singleLanguagePost.setContents(List.of(englishContent()));
+
+        when(audioRepository.findByPostIdAndTypeAndLanguage(eq(postId), any(), any())).thenReturn(Optional.empty());
+        stubArtifactSave();
+        stubPresign();
+
+        audioOutput.dispatch(singleLanguagePost);
+
+        verify(audioRepository, never()).findByPostIdAndTypeAndLanguage(eq(postId), any(), eq(Language.PORTUGUESE));
+
+        var saved = ArgumentCaptor.forClass(AudioEntity.class);
+        verify(audioRepository, times(4)).save(saved.capture());
+        saved.getAllValues().forEach(artifact -> assertEquals(Language.ENGLISH, artifact.getLanguage()));
+
+        var job = ArgumentCaptor.forClass(AudioJobRequest.class);
+        verify(audioWorkerFeignClient).generate(job.capture());
+        assertEquals(2, job.getValue().uploads().values().stream()
+            .flatMap(language -> language.keySet().stream())
+            .count());
+        job.getValue().uploads().values().forEach(language ->
+            assertTrue(language.containsKey(Language.ENGLISH)));
+    }
+
+    @Test
+    void deleteArtifacts_removesR2ObjectsAndRowsForPosts() {
+        var ids = List.of(postId);
+        var stored = artifact(AudioType.NARRATION, Language.ENGLISH, "post/audio/narration.wav", AudioStatus.READY);
+        var missingKey = artifact(AudioType.PODCAST, Language.ENGLISH, null, AudioStatus.FAILED);
+        when(audioRepository.findByPostIdIn(ids)).thenReturn(List.of(stored, missingKey));
+
+        audioOutput.deleteArtifacts(ids);
+
+        verify(storageOutput).delete("post/audio/narration.wav");
+        verify(storageOutput, times(1)).delete(anyString());
+        verify(audioRepository).deleteAll(List.of(stored, missingKey));
+    }
+
+    @Test
     void dispatch_workerFails_doesNotPropagate() {
         stubArtifactSave();
         stubPresign();

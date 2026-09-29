@@ -1,10 +1,13 @@
 package dev.vitorpaulo.blog.config.captcha;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class TurnstileClient {
@@ -18,21 +21,26 @@ public class TurnstileClient {
 	private String secret;
 
 	public boolean verify(String token) {
-		final var response = restClient.post()
-			.uri(VERIFY_URL)
-			.body(new TurnstileVerificationRequest(secret, token))
-			.retrieve()
-			.body(TurnstileVerificationResponse.class);
+		try {
+			final var response = restClient.post()
+				.uri(VERIFY_URL)
+				.body(new TurnstileVerificationRequest(secret, token))
+				.retrieve()
+				.body(TurnstileVerificationResponse.class);
 
-		return response != null && response.success();
+			return response != null && response.success();
+		} catch (RestClientException exception) {
+			log.warn("Turnstile verification request failed, failing closed", exception);
+			return false;
+		}
 	}
 
-	private record TurnstileVerificationRequest(
+	record TurnstileVerificationRequest(
 		String secret,
 		String response
 	) {}
 
-	private record TurnstileVerificationResponse(
+	record TurnstileVerificationResponse(
 		boolean success
 	) {}
 }
