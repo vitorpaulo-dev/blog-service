@@ -33,7 +33,6 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,6 +49,21 @@ class AuthorOutputTest {
     @Mock
     private AuthorOutputMapper authorOutputMapper;
 
+    @Mock
+    private User user;
+
+    @Mock
+    private GetUserResponse getUserResponse;
+
+    @Mock
+    private ListOrganizationMembershipsResponse membershipResponse;
+
+    @Mock
+    private OrganizationMemberships memberships;
+
+    @Mock
+    private OrganizationMembership membership;
+
     @InjectMocks
     private AuthorOutput authorOutput;
 
@@ -57,10 +71,6 @@ class AuthorOutputTest {
 
     private final Jwt adminJwt = new Jwt("raw", Instant.now(), Instant.now().plusSeconds(3600),
         Map.of("alg", "RS256"), Map.of("sub", "user_sub", "org_role", "org:admin"));
-
-    private final User user = mock(User.class);
-
-    private final GetUserResponse getUserResponse = mock(GetUserResponse.class);
 
     private final AuthorEntity authorEntity = AuthorEntity.builder()
         .id(authorId)
@@ -83,7 +93,7 @@ class AuthorOutputTest {
 
     @Test
     void getAuthor_membershipResolved_usesClerkRole() {
-        stubMembership(Optional.of(stubMembershipResponse(List.of(membershipWithRole("org:member")))));
+        stubMembership(Optional.of(List.of(membershipWithRole("org:member"))));
 
         var model = new AuthorModel(authorId, "Vitor", null, null, null, "org:member");
         when(authorOutputMapper.toModel(authorEntity, "org:member")).thenReturn(model);
@@ -104,7 +114,7 @@ class AuthorOutputTest {
 
     @Test
     void getAuthor_noMembership_defaultsToMemberRole() {
-        stubMembership(Optional.of(stubMembershipResponse(List.of())));
+        stubMembership(Optional.of(List.of()));
 
         var model = new AuthorModel(authorId, "Vitor", null, null, null, AuthorRoleMapper.MEMBER_CLERK_ROLE);
         when(authorOutputMapper.toModel(authorEntity, AuthorRoleMapper.MEMBER_CLERK_ROLE)).thenReturn(model);
@@ -112,21 +122,28 @@ class AuthorOutputTest {
         assertEquals(model, authorOutput.getAuthor(adminJwt));
     }
 
-    private void stubMembership(Optional<OrganizationMemberships> memberships) {
-        var response = mock(ListOrganizationMembershipsResponse.class);
-        when(response.organizationMemberships()).thenReturn(memberships);
-        when(clerk.organizationMemberships().list(any(ListOrganizationMembershipsRequest.class)))
-            .thenReturn(response);
+    @Test
+    void getAuthor_missingSlugWithOneConflict_appendsIncrementedCounter() {
+        when(authorRepository.countBySlugAndIdNot("vitor", authorId)).thenReturn(1L);
+
+        var model = new AuthorModel(authorId, "Vitor", "vitor-2", null, null, AuthorRoleMapper.MEMBER_CLERK_ROLE);
+        when(authorOutputMapper.toModel(authorEntity, AuthorRoleMapper.MEMBER_CLERK_ROLE)).thenReturn(model);
+
+        authorOutput.getAuthor(adminJwt);
+
+        assertEquals("vitor-2", authorEntity.getSlug());
+        verify(authorRepository).save(authorEntity);
     }
 
-    private OrganizationMemberships stubMembershipResponse(List<OrganizationMembership> data) {
-        var memberships = mock(OrganizationMemberships.class);
-        when(memberships.data()).thenReturn(data);
-        return memberships;
+    private void stubMembership(Optional<List<OrganizationMembership>> data) {
+        data.ifPresent(list -> when(memberships.data()).thenReturn(list));
+        when(membershipResponse.organizationMemberships())
+            .thenReturn(data.map(ignored -> memberships));
+        when(clerk.organizationMemberships().list(any(ListOrganizationMembershipsRequest.class)))
+            .thenReturn(membershipResponse);
     }
 
     private OrganizationMembership membershipWithRole(String role) {
-        var membership = mock(OrganizationMembership.class);
         when(membership.role()).thenReturn(role);
         return membership;
     }

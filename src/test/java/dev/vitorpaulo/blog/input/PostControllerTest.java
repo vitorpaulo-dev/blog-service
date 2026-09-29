@@ -19,7 +19,6 @@ import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
-import dev.vitorpaulo.blog.output.post.PostOutput;
 import dev.vitorpaulo.blog.usecase.audio.RetryPostAudioUseCase;
 import dev.vitorpaulo.blog.usecase.post.*;
 import org.junit.jupiter.api.Test;
@@ -48,10 +47,11 @@ class PostControllerTest {
     @Mock private SetPostFeaturedWeightsUseCase setPostFeaturedWeightsUseCase;
     @Mock private GetFeaturedPostsUseCase getFeaturedPostsUseCase;
     @Mock private PostInputMapper postInputMapper;
-    @Mock private PostOutput postOutput;
     @Mock private AuthorModel author;
     @Mock private PostModel postModel;
+    @Mock private PostModel otherPostModel;
     @Mock private PostResponse postResponse;
+    @Mock private PostResponse otherPostResponse;
     @Mock private CreatePostRequest createRequest;
     @Mock private UpdatePostRequest updateRequest;
     @Mock private MassDeleteRequest massDeleteRequest;
@@ -178,15 +178,13 @@ class PostControllerTest {
 
     @Test
     void getFeatured_returnsMappedResponses() {
-        var anotherModel = mock(PostModel.class);
-        var anotherResponse = mock(PostResponse.class);
-        when(getFeaturedPostsUseCase.execute(Language.ENGLISH)).thenReturn(List.of(postModel, anotherModel));
+        when(getFeaturedPostsUseCase.execute(Language.ENGLISH)).thenReturn(List.of(postModel, otherPostModel));
         when(postInputMapper.toResponse(postModel)).thenReturn(postResponse);
-        when(postInputMapper.toResponse(anotherModel)).thenReturn(anotherResponse);
+        when(postInputMapper.toResponse(otherPostModel)).thenReturn(otherPostResponse);
 
         var result = postController.getFeatured(Language.ENGLISH);
 
-        assertEquals(List.of(postResponse, anotherResponse), result);
+        assertEquals(List.of(postResponse, otherPostResponse), result);
     }
 
     @Test

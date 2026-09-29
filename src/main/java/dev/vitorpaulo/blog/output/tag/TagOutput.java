@@ -38,12 +38,6 @@ public class TagOutput {
             .orElseThrow(() -> new NotFoundException(ExceptionCode.TAG_NOT_FOUND));
     }
 
-    public TagModel findBySlug(String slug, Language language) {
-        return tagRepository.findBySlugAndLanguage(slug, language)
-            .map(tagOutputMapper::toModel)
-            .orElseThrow(() -> new NotFoundException(ExceptionCode.TAG_NOT_FOUND));
-    }
-
     @Transactional
     public TagModel save(TagModel tag) {
         final var firstContent = getFirstContent(tag.translations());
@@ -84,7 +78,8 @@ public class TagOutput {
     }
 
     public PaginatedOutput<TagModel> search(PaginatedInput<TagQueryModel> input, Language language) {
-        final var pageable = PageRequest.of(input.page(), input.size(), Sort.by(input.direction(), mapSortProperty(input.sort())));
+        final var pageable = PageRequest.of(input.page(), input.size(), Sort.by(
+            input.direction() != null ? input.direction() : Sort.Direction.ASC, mapSortProperty(input.sort())));
         final var name = input.query() != null ? input.query().name() : null;
         final var result = tagRepository.search(name, language, pageable);
 

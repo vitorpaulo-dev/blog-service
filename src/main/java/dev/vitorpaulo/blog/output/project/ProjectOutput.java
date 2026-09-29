@@ -153,14 +153,16 @@ public class ProjectOutput {
 
 	@Transactional(readOnly = true)
 	public PaginatedOutput<ProjectModel> search(PaginatedInput<ProjectQueryModel> pageableInput, AuthorModel author) {
-		final var language = pageableInput.query().language();
+		final var query = pageableInput.query();
+		final var language = query != null ? query.language() : null;
+		final var filterAuthorId = query != null ? query.authorId() : null;
 		final var pageable = PageRequest.of(pageableInput.page(), pageableInput.size());
 		final var page = projectRepository.search(
-				pageableInput.query().query(),
-				pageableInput.query().authorId(),
-				pageableInput.query().tagId(),
+				query != null ? query.query() : null,
+				filterAuthorId,
+				query != null ? query.tagId() : null,
 				language != null ? language.name() : null,
-				showsDrafts(pageableInput.query().authorId(), author),
+				showsDrafts(filterAuthorId, author),
 				pageable,
 				mapSortProperty(pageableInput.sort(), pageableInput.direction())
 			);
@@ -252,8 +254,8 @@ public class ProjectOutput {
 	}
 
 	private String mapSortProperty(String sort, Sort.Direction direction) {
-		final var dir = direction.name();
-		return switch (sort) {
+		final var dir = (direction != null ? direction : Sort.Direction.ASC).name();
+		return switch (sort != null ? sort : "") {
 			case "slug" -> "slug " + dir;
 			case "viewCount" -> "view_count " + dir;
 			case "reactionCount" -> "reaction_count " + dir;

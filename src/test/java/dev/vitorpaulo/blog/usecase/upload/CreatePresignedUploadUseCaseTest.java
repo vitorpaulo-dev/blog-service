@@ -43,8 +43,6 @@ class CreatePresignedUploadUseCaseTest {
 
 	@Test
 	void projectContentFolderInvalidSubfolder_throwsBadRequest() {
-		// valid folder name but subfolder not whitelisted for that folder combo is covered below;
-		// this case uses an entirely unknown subfolder on a known folder
 		final var request = new PresignUploadRequestModel("post", "logo", "x.png");
 
 		final var exception = assertThrows(BusinessException.class, () -> useCase.execute(request));

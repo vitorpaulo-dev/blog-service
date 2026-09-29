@@ -183,10 +183,16 @@ public class PostOutput {
         return postOutputMapper.toModel(saved, projectIds, tagIds, audioOutput.artifactMap(saved, null));
     }
 
+    @Transactional(readOnly = true)
+    public List<UUID> findOwnedIds(List<UUID> ids, AuthorModel author) {
+        return postRepository.findAllByIdWithAuthor(ids, author.id(), authorRoleChecker.isAdmin()).stream()
+            .map(PostEntity::getId)
+            .toList();
+    }
+
     @Transactional
-    public void deleteAll(List<UUID> ids, AuthorModel author) {
-        final var entities = postRepository.findAllByIdWithAuthor(ids, author.id(), authorRoleChecker.isAdmin());
-        postRepository.deleteAll(entities);
+    public void deleteByIds(List<UUID> ids) {
+        postRepository.deleteAll(postRepository.findAllById(ids));
     }
 
     @Transactional
@@ -220,17 +226,21 @@ public class PostOutput {
 
     @Transactional(readOnly = true)
     public PaginatedOutput<PostModel> search(PaginatedInput<PostQueryModel> pageableInput, AuthorModel author) {
-        final var language = pageableInput.query().language();
+        final var query = pageableInput.query();
+        final var language = query != null ? query.language() : null;
+        final var filterAuthorId = query != null ? query.authorId() : null;
+        final var inputSort = pageableInput.sort();
         final var pageable = PageRequest.of(pageableInput.page(), pageableInput.size());
         final var page = postRepository.search(
-                pageableInput.query().query(),
-                pageableInput.query().authorId(),
-                pageableInput.query().tagId(),
+                query != null ? query.query() : null,
+                filterAuthorId,
+                query != null ? query.tagId() : null,
                 language != null ? language.name() : null,
-                showsDrafts(pageableInput.query().authorId(), author),
+                showsDrafts(filterAuthorId, author),
                 pageable,
-                pageableInput.sort(),
-				pageableInput.direction().name()
+                inputSort != null ? inputSort : "createdAt",
+				(pageableInput.direction() != null ? pageableInput.direction() : Sort.Direction.ASC).name(),
+                inputSort == null
             );
 
         return new PaginatedOutput<>(

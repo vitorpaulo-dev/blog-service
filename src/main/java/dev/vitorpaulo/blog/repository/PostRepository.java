@@ -83,7 +83,9 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
                     pc.search_vector,
                     websearch_to_tsquery('simple', :query)
                 )
-            END DESC
+            END DESC,
+            CASE WHEN :defaultSort = true
+                THEN p.id END ASC
         """,
 		countQuery = """
         SELECT COUNT(1)
@@ -129,7 +131,8 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
 		boolean showDrafts,
 		Pageable pageable,
 		String sort,
-		String direction
+		String direction,
+		boolean defaultSort
 	);
 
     @Query("""

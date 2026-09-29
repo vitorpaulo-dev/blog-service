@@ -1,5 +1,6 @@
 package dev.vitorpaulo.blog.input.request;
 
+import dev.vitorpaulo.blog.common.dto.GenericPageableRequest;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.PostStatus;
 import dev.vitorpaulo.blog.model.ProjectStatus;
@@ -7,6 +8,7 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 import java.util.Map;
@@ -99,5 +101,36 @@ class RequestValidationTest {
         assertTrue(updatePost.isEmpty());
         assertTrue(createProject.isEmpty());
         assertTrue(updateProject.isEmpty());
+    }
+
+    @Test
+    void featuredRequests_missingPostId_invalid() {
+        var violations = validator.validate(new FeaturedPostRequest(null, 1));
+
+        assertFalse(violations.isEmpty());
+    }
+
+    @Test
+    void featuredRequests_nullWeight_staysValid() {
+        var violations = validator.validate(new FeaturedPostRequest(UUID.randomUUID(), null));
+
+        assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    void genericPageableRequest_nullOptionalFields_valid() {
+        var violations = validator.validate(new GenericPageableRequest<PostQueryRequest>(null, 0, 10, null, null));
+
+        assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    void genericPageableRequest_queryWithoutLanguage_invalid() {
+        var request = new GenericPageableRequest<>(
+            new PostQueryRequest("spring", null, null, null), 0, 10, "createdAt", Sort.Direction.ASC);
+
+        var violations = validator.validate(request);
+
+        assertFalse(violations.isEmpty());
     }
 }
