@@ -1,13 +1,17 @@
 package dev.vitorpaulo.blog.output.view;
 
+import dev.vitorpaulo.blog.config.cache.CacheConfig;
 import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
 import dev.vitorpaulo.blog.repository.RedisRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.CacheManager;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.util.UUID;
@@ -20,6 +24,7 @@ public class ViewCounterOutput {
 	private final PostRepository postRepository;
 	private final ProjectRepository projectRepository;
 	private final RedisRepository redisRepository;
+	private final CacheManager cacheManager;
 
 	private static final String POST_KEY_PREFIX = "post:";
 	private static final String PROJECT_KEY_PREFIX = "project:";
@@ -44,6 +49,7 @@ public class ViewCounterOutput {
 				now,
 				VIEW_TTL
 			);
+			evictAfterCommit(CacheConfig.POST_SLUG);
 		} catch (Exception e) {
 			log.error("Failed to count view for post {}", postId, e);
 		}
@@ -67,8 +73,30 @@ public class ViewCounterOutput {
 				now,
 				VIEW_TTL
 			);
+			evictAfterCommit(CacheConfig.PROJECT_SLUG);
 		} catch (Exception e) {
 			log.error("Failed to count view for project {}", projectId, e);
+		}
+	}
+
+	private void evictAfterCommit(String cacheName) {
+		if (TransactionSynchronizationManager.isSynchronizationActive()) {
+			TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+				@Override
+				public void afterCommit() {
+					clearCache(cacheName);
+				}
+			});
+			return;
+		}
+		clearCache(cacheName);
+	}
+
+	private void clearCache(String cacheName) {
+		try {
+			cacheManager.getCache(cacheName).clear();
+		} catch (Exception e) {
+			log.error("Failed to evict cache {} after view count", cacheName, e);
 		}
 	}
 }
