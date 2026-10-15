@@ -13,6 +13,6 @@ public class GetProjectBySlugUseCase {
     private final ProjectOutput projectOutput;
 
     public ProjectModel execute(String slug, Language language, String ip) {
-        return projectOutput.findBySlugAndIncrementView(slug, language, ip);
+        return projectOutput.findBySlug(slug, language, ip);
     }
 }

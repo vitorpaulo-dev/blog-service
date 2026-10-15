@@ -9,6 +9,7 @@ import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.output.audio.AudioOutput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
+import dev.vitorpaulo.blog.output.view.ViewCounterOutput;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
@@ -40,11 +41,10 @@ public class PostOutput {
     private final RedisRepository redisRepository;
     private final AudioOutput audioOutput;
     private final AuthorRoleChecker authorRoleChecker;
+    private final ViewCounterOutput viewCounterOutput;
 
 	private static final String KEY_PREFIX = "post:";
-	private static final String VIEWS_KEY_SUFFIX = ":views";
 	private static final String REACTIONS_KEY_SUFFIX = ":reactions";
-	private static final Duration VIEW_TTL = Duration.ofHours(48);
 	private static final Duration REACTION_TTL = Duration.ofSeconds(604800);
 
     @Transactional(readOnly = true)
@@ -96,23 +96,13 @@ public class PostOutput {
         return current == null ? 1L : current + 1;
     }
 
-    @Transactional
-    public PostModel findBySlugAndIncrementView(String slug, Language language, String ip) {
-        final var entity = postRepository.findBySlugAndLanguage(slug, language)
+    @Transactional(readOnly = true)
+    public PostModel findBySlug(String slug, Language language, String ip) {
+        final var entity = postRepository.findBySlugAndLanguage(slug, language, authorRoleChecker.isAuthenticated())
                 .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_SLUG_NOT_FOUND));
 
-        final var viewKey = KEY_PREFIX + entity.getId() + ":view:" + ip;
-        if (!redisRepository.keyExists(viewKey)) {
-            final var now = System.currentTimeMillis();
-            entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
-            postRepository.save(entity);
-            redisRepository.set(viewKey, VIEW_TTL);
-            redisRepository.addToSortedSet(
-                    KEY_PREFIX + entity.getId() + VIEWS_KEY_SUFFIX,
-                    ip + ":" + now,
-                    now,
-                    VIEW_TTL
-            );
+        if (entity.getStatus() == PostStatus.PUBLISHED) {
+            viewCounterOutput.countPostView(entity.getId(), ip);
         }
 
 		return postOutputMapper.toModel(

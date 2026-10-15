@@ -7,6 +7,7 @@ import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.ProjectContentEntity;
 import dev.vitorpaulo.blog.domain.ProjectEntity;
 import dev.vitorpaulo.blog.output.mapper.ProjectOutputMapper;
+import dev.vitorpaulo.blog.output.view.ViewCounterOutput;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
@@ -34,11 +35,10 @@ public class ProjectOutput {
 	private final TagRepository tagRepository;
 	private final RedisRepository redisRepository;
 	private final AuthorRoleChecker authorRoleChecker;
+	private final ViewCounterOutput viewCounterOutput;
 
 	private static final String KEY_PREFIX = "project:";
-	private static final String VIEWS_KEY_SUFFIX = ":views";
 	private static final String REACTIONS_KEY_SUFFIX = ":reactions";
-	private static final Duration VIEW_TTL = Duration.ofHours(48);
 	private static final Duration REACTION_TTL = Duration.ofSeconds(604800);
 
 	@Transactional(readOnly = true)
@@ -48,23 +48,13 @@ public class ProjectOutput {
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
 	}
 
-	@Transactional
-	public ProjectModel findBySlugAndIncrementView(String slug, Language language, String ip) {
-		final var entity = projectRepository.findBySlugAndLanguage(slug, language)
+	@Transactional(readOnly = true)
+	public ProjectModel findBySlug(String slug, Language language, String ip) {
+		final var entity = projectRepository.findBySlugAndLanguage(slug, language, authorRoleChecker.isAuthenticated())
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_SLUG_NOT_FOUND));
 
-		final var viewKey = KEY_PREFIX + entity.getId() + ":view:" + ip;
-		if (!redisRepository.keyExists(viewKey)) {
-			final var now = System.currentTimeMillis();
-			entity.setViewCount(entity.getViewCount() == null ? 1L : entity.getViewCount() + 1);
-			projectRepository.save(entity);
-			redisRepository.set(viewKey, VIEW_TTL);
-			redisRepository.addToSortedSet(
-					KEY_PREFIX + entity.getId() + VIEWS_KEY_SUFFIX,
-					ip + ":" + now,
-					now,
-					VIEW_TTL
-			);
+		if (entity.getStatus() == ProjectStatus.PUBLISHED) {
+			viewCounterOutput.countProjectView(entity.getId(), ip);
 		}
 
 		return projectOutputMapper.toModel(entity, Collections.emptyList());
