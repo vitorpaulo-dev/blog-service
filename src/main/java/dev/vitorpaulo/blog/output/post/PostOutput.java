@@ -10,8 +10,8 @@ import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.output.audio.AudioOutput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
-import dev.vitorpaulo.blog.output.view.ViewCounterOutput;
 import dev.vitorpaulo.blog.model.*;
+import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
@@ -44,8 +44,6 @@ public class PostOutput {
     private final RedisRepository redisRepository;
     private final AudioOutput audioOutput;
     private final AuthorRoleChecker authorRoleChecker;
-    private final ViewCounterOutput viewCounterOutput;
-    private final PostReadOutput postReadOutput;
 
 	private static final String KEY_PREFIX = "post:";
 	private static final String REACTIONS_KEY_SUFFIX = ":reactions";
@@ -101,12 +99,24 @@ public class PostOutput {
         return current == null ? 1L : current + 1;
     }
 
-    public PostModel findBySlug(String slug, Language language, String ip) {
-        final var model = postReadOutput.findBySlug(slug, language, authorRoleChecker.isAuthenticated());
-        if (model.status() == PostStatus.PUBLISHED) {
-            viewCounterOutput.countPostView(model.id(), ip);
-        }
-        return model;
+    @Cacheable(cacheNames = CacheConfig.POST_SLUG, key = "@cacheKeys.slug(#slug, #language, @authorRoleChecker.isAuthenticated())")
+    @Transactional(readOnly = true)
+    public PostModel findBySlug(String slug, Language language) {
+        final var entity = postRepository.findBySlugAndLanguage(slug, language, authorRoleChecker.isAuthenticated())
+                .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_SLUG_NOT_FOUND));
+
+        return postOutputMapper.toModel(
+            entity,
+            postRepository.findProjectIds(entity.getId()),
+            postRepository.findTagIds(entity.getId()),
+            cacheSafeAudio(audioOutput.artifactMap(entity.getId(), language))
+        );
+    }
+
+    private static Map<AudioType, Map<Language, AudioModel>> cacheSafeAudio(Map<AudioType, Map<Language, AudioModel>> source) {
+        final var audio = new LinkedHashMap<AudioType, Map<Language, AudioModel>>(source.size());
+        source.forEach((type, byLanguage) -> audio.put(type, new LinkedHashMap<>(byLanguage)));
+        return audio;
     }
 
 	@Transactional

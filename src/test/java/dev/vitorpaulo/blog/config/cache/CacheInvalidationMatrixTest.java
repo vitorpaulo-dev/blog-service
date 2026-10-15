@@ -2,9 +2,7 @@ package dev.vitorpaulo.blog.config.cache;
 
 import dev.vitorpaulo.blog.output.audio.AudioOutput;
 import dev.vitorpaulo.blog.output.post.PostOutput;
-import dev.vitorpaulo.blog.output.post.PostReadOutput;
 import dev.vitorpaulo.blog.output.project.ProjectOutput;
-import dev.vitorpaulo.blog.output.project.ProjectReadOutput;
 import dev.vitorpaulo.blog.output.tag.TagOutput;
 import org.junit.jupiter.api.Test;
 import org.springframework.cache.annotation.CacheEvict;
@@ -14,7 +12,6 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CacheInvalidationMatrixTest {
@@ -31,12 +28,12 @@ class CacheInvalidationMatrixTest {
 
 	@Test
 	void postFindBySlug_isCachedOnPostSlug() {
-		assertCacheable(PostReadOutput.class, "findBySlug", CacheConfig.POST_SLUG, "@cacheKeys.slug(#slug, #language, #authenticated)");
+		assertCacheable(PostOutput.class, "findBySlug", CacheConfig.POST_SLUG, "@cacheKeys.slug(#slug, #language, @authorRoleChecker.isAuthenticated())");
 	}
 
 	@Test
 	void projectFindBySlug_isCachedOnProjectSlug() {
-		assertCacheable(ProjectReadOutput.class, "findBySlug", CacheConfig.PROJECT_SLUG, "@cacheKeys.slug(#slug, #language, #authenticated)");
+		assertCacheable(ProjectOutput.class, "findBySlug", CacheConfig.PROJECT_SLUG, "@cacheKeys.slug(#slug, #language, @authorRoleChecker.isAuthenticated())");
 	}
 
 	@Test
@@ -57,13 +54,6 @@ class CacheInvalidationMatrixTest {
 	@Test
 	void tagFindAllById_isCachedOnTagBatch() {
 		assertCacheable(TagOutput.class, "findAllById", CacheConfig.TAG_BATCH, "@cacheKeys.batch(#ids, #language)");
-	}
-
-	@Test
-	void postWrapperFindBySlug_isNotAnnotated() {
-		var method = findMethod(PostOutput.class, "findBySlug");
-		assertNull(method.getAnnotation(Cacheable.class));
-		assertNull(method.getAnnotation(CacheEvict.class));
 	}
 
 	@Test

@@ -7,10 +7,10 @@ import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.model.*;
+import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
 import dev.vitorpaulo.blog.output.audio.AudioOutput;
-import dev.vitorpaulo.blog.output.view.ViewCounterOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
@@ -30,7 +30,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import java.time.Duration;
+import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,13 +53,12 @@ class PostOutputTest {
     @Mock private RedisRepository redisRepository;
     @Mock private AudioOutput audioOutput;
     @Mock private AuthorRoleChecker authorRoleChecker;
-    @Mock private ViewCounterOutput viewCounterOutput;
-    @Mock private PostReadOutput postReadOutput;
     @Mock private PostModel post;
     @Mock private PostModel expectedResult;
     @Mock private PostModel secondResult;
     @Mock private PostEntity postEntity;
     @Mock private PostEntity secondPostEntity;
+    @Mock private AudioModel audioModel;
     @Mock private PostContentEntity existingContent;
     @Mock private PostContentEntity newContent;
     @Mock private PostContentModel postContentModel;
@@ -96,57 +97,60 @@ class PostOutputTest {
     }
 
     @Test
-    void findBySlug_published_delegatesToReaderAndCountsView() {
-        var postId = UUID.randomUUID();
-        when(authorRoleChecker.isAuthenticated()).thenReturn(false);
-        when(postReadOutput.findBySlug("my-post", Language.ENGLISH, false)).thenReturn(expectedResult);
-        when(expectedResult.status()).thenReturn(PostStatus.PUBLISHED);
-        when(expectedResult.id()).thenReturn(postId);
-
-        var result = postOutput.findBySlug("my-post", Language.ENGLISH, "1.2.3.4");
-
-        assertEquals(expectedResult, result);
-        verify(viewCounterOutput).countPostView(postId, "1.2.3.4");
-    }
-
-    @Test
-    void findBySlug_authenticated_passesAuthenticatedFlagToReader() {
+    void findBySlug_found_mapsWithProjectTagIdsAudioAndAuthFlag() {
         var postId = UUID.randomUUID();
         when(authorRoleChecker.isAuthenticated()).thenReturn(true);
-        when(postReadOutput.findBySlug("my-post", Language.ENGLISH, true)).thenReturn(expectedResult);
-        when(expectedResult.status()).thenReturn(PostStatus.PUBLISHED);
-        when(expectedResult.id()).thenReturn(postId);
+        when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH, true)).thenReturn(Optional.of(postEntity));
+        when(postEntity.getId()).thenReturn(postId);
+        when(postRepository.findProjectIds(postId)).thenReturn(List.of());
+        when(postRepository.findTagIds(postId)).thenReturn(List.of());
+        when(audioOutput.artifactMap(postId, Language.ENGLISH)).thenReturn(Map.of());
+        when(postOutputMapper.toModel(postEntity, List.of(), List.of(), Map.of())).thenReturn(expectedResult);
 
-        var result = postOutput.findBySlug("my-post", Language.ENGLISH, "1.2.3.4");
+        var result = postOutput.findBySlug("my-post", Language.ENGLISH);
 
         assertEquals(expectedResult, result);
-        verify(postReadOutput).findBySlug("my-post", Language.ENGLISH, true);
-        verify(viewCounterOutput).countPostView(postId, "1.2.3.4");
+        verify(postRepository).findBySlugAndLanguage("my-post", Language.ENGLISH, true);
     }
 
     @Test
-    void findBySlug_draft_returnsModelWithoutCounting() {
-        when(authorRoleChecker.isAuthenticated()).thenReturn(true);
-        when(postReadOutput.findBySlug("draft-post", Language.ENGLISH, true)).thenReturn(expectedResult);
-        when(expectedResult.status()).thenReturn(PostStatus.DRAFT);
-
-        var result = postOutput.findBySlug("draft-post", Language.ENGLISH, "1.2.3.4");
-
-        assertEquals(expectedResult, result);
-        verifyNoInteractions(viewCounterOutput);
-    }
-
-    @Test
-    void findBySlug_readerThrows_propagatesWithoutCounting() {
+    void findBySlug_notFound_throwsNotFoundException() {
         when(authorRoleChecker.isAuthenticated()).thenReturn(false);
-        when(postReadOutput.findBySlug(anyString(), any(), anyBoolean()))
-                .thenThrow(new NotFoundException(ExceptionCode.POST_SLUG_NOT_FOUND));
+        when(postRepository.findBySlugAndLanguage("nonexistent", Language.ENGLISH, false)).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class,
-                () -> postOutput.findBySlug("nonexistent", Language.ENGLISH, "1.2.3.4"));
+                () -> postOutput.findBySlug("nonexistent", Language.ENGLISH));
 
         assertEquals(ExceptionCode.POST_SLUG_NOT_FOUND, ex.getCode());
-        verifyNoInteractions(viewCounterOutput);
+        verifyNoInteractions(postOutputMapper);
+        verifyNoInteractions(audioOutput);
+    }
+
+    @Test
+    void findBySlug_audioEnumMap_mappedToSerializationSafeLinkedHashMaps() {
+        var postId = UUID.randomUUID();
+        var audio = new EnumMap<AudioType, Map<Language, AudioModel>>(AudioType.class);
+        var byLanguage = new EnumMap<Language, AudioModel>(Language.class);
+        byLanguage.put(Language.PORTUGUESE, audioModel);
+        audio.put(AudioType.PODCAST, byLanguage);
+
+        when(authorRoleChecker.isAuthenticated()).thenReturn(false);
+        when(postRepository.findBySlugAndLanguage("my-post", Language.PORTUGUESE, false)).thenReturn(Optional.of(postEntity));
+        when(postEntity.getId()).thenReturn(postId);
+        when(postRepository.findProjectIds(postId)).thenReturn(List.of());
+        when(postRepository.findTagIds(postId)).thenReturn(List.of());
+        when(audioOutput.artifactMap(postId, Language.PORTUGUESE)).thenReturn(audio);
+        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
+
+        var result = postOutput.findBySlug("my-post", Language.PORTUGUESE);
+
+        assertEquals(expectedResult, result);
+        var captor = ArgumentCaptor.forClass(Map.class);
+        verify(postOutputMapper).toModel(eq(postEntity), anyList(), anyList(), captor.capture());
+        var cachedAudio = captor.getValue();
+        assertInstanceOf(LinkedHashMap.class, cachedAudio);
+        assertEquals(audio, cachedAudio);
+        assertInstanceOf(LinkedHashMap.class, cachedAudio.get(AudioType.PODCAST));
     }
 
     @ParameterizedTest
