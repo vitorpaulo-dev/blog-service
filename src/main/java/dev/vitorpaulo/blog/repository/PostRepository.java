@@ -23,17 +23,25 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
         SELECT DISTINCT p FROM PostEntity p
 		JOIN FETCH p.contents c
         WHERE p.slug = :slug
-		  AND p.status = 'PUBLISHED'
+		  AND (:bypass = true OR p.status = 'PUBLISHED')
 		  AND c.id = COALESCE(
 			  (SELECT pc.id FROM PostContentEntity pc WHERE pc.post = p AND pc.language = :language),
 			  (SELECT pc2.id FROM PostContentEntity pc2 WHERE pc2.post = p ORDER BY pc2.language LIMIT 1)
 		  )
     """)
-    Optional<PostEntity> findBySlugAndLanguage(String slug, Language language);
+    Optional<PostEntity> findBySlugAndLanguage(String slug, Language language, Boolean bypass);
 
     Optional<PostEntity> findBySlugAndStatus(String slug, PostStatus status);
 
     long countBySlugAndIdNot(String slug, UUID id);
+
+    @Modifying
+    @Query("""
+        UPDATE PostEntity p
+        SET p.viewCount = COALESCE(p.viewCount, 0) + 1
+        WHERE p.id = :id
+    """)
+    void incrementViewCount(UUID id);
 
 	@Query(
 		value = """

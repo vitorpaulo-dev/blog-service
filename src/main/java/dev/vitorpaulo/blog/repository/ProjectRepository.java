@@ -35,17 +35,25 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
 		SELECT p FROM ProjectEntity p
 		JOIN FETCH p.contents c
 		WHERE p.slug = :slug
-		  AND p.status = 'PUBLISHED'
+		  AND (:bypass = true OR p.status = 'PUBLISHED')
 		  AND c.id = COALESCE(
 			  (SELECT pc.id FROM ProjectContentEntity pc WHERE pc.project = p AND pc.language = :language),
 			  (SELECT pc2.id FROM ProjectContentEntity pc2 WHERE pc2.project = p ORDER BY pc2.language LIMIT 1)
 		  )
 	""")
-	Optional<ProjectEntity> findBySlugAndLanguage(String slug, Language language);
+	Optional<ProjectEntity> findBySlugAndLanguage(String slug, Language language, Boolean bypass);
 
     Optional<ProjectEntity> findBySlugAndStatus(String slug, ProjectStatus status);
 
     long countBySlugAndIdNot(String slug, UUID id);
+
+    @Modifying
+    @Query("""
+        UPDATE ProjectEntity p
+        SET p.viewCount = COALESCE(p.viewCount, 0) + 1
+        WHERE p.id = :id
+    """)
+    void incrementViewCount(UUID id);
 
     @Query(
         value = """

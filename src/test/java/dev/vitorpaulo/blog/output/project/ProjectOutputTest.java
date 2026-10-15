@@ -8,6 +8,7 @@ import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.ProjectOutputMapper;
+import dev.vitorpaulo.blog.output.view.ViewCounterOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
 import dev.vitorpaulo.blog.repository.RedisRepository;
@@ -45,6 +46,7 @@ class ProjectOutputTest {
     @Mock private TagRepository tagRepository;
     @Mock private RedisRepository redisRepository;
     @Mock private AuthorRoleChecker authorRoleChecker;
+    @Mock private ViewCounterOutput viewCounterOutput;
     @Mock private AuthorModel author;
     @Mock private ProjectModel project;
     @Mock private ProjectModel expectedResult;
@@ -87,61 +89,60 @@ class ProjectOutputTest {
     }
 
     @Test
-    void findBySlugAndIncrementView_found_incrementsViewCount() {
+    void findBySlug_published_anonymous_mapsModelAndCountsViewWithoutSyncWrites() {
         var projectId = UUID.randomUUID();
-        when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
+        when(authorRoleChecker.isAuthenticated()).thenReturn(false);
+        when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH, false)).thenReturn(Optional.of(projectEntity));
         when(projectEntity.getId()).thenReturn(projectId);
-        when(redisRepository.keyExists(eq("project:" + projectId + ":view:1.2.3.4"))).thenReturn(false);
-        when(projectEntity.getViewCount()).thenReturn(5L);
-        when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
+        when(projectEntity.getStatus()).thenReturn(ProjectStatus.PUBLISHED);
         when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
 
-        var result = projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH, "1.2.3.4");
+        var result = projectOutput.findBySlug("my-project", Language.ENGLISH, "1.2.3.4");
 
-        verify(projectEntity).setViewCount(6L);
         assertEquals(expectedResult, result);
-        verify(redisRepository).set(eq("project:" + projectId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
-        verify(redisRepository).addToSortedSet(eq("project:" + projectId + ":views"), startsWith("1.2.3.4:"), anyDouble(), eq(Duration.ofHours(48)));
-    }
-
-    @Test
-    void findBySlugAndIncrementView_nullViewCount_setsToOne() {
-        var projectId = UUID.randomUUID();
-        when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
-        when(projectEntity.getId()).thenReturn(projectId);
-        when(redisRepository.keyExists(eq("project:" + projectId + ":view:1.2.3.4"))).thenReturn(false);
-        when(projectEntity.getViewCount()).thenReturn(null);
-        when(projectRepository.save(projectEntity)).thenReturn(projectEntity);
-
-        projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH, "1.2.3.4");
-
-        verify(projectEntity).setViewCount(1L);
-        verify(redisRepository).set(eq("project:" + projectId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
-        verify(redisRepository).addToSortedSet(eq("project:" + projectId + ":views"), startsWith("1.2.3.4:"), anyDouble(), eq(Duration.ofHours(48)));
-    }
-
-    @Test
-    void findBySlugAndIncrementView_keyAlreadyExists_doesNotIncrement() {
-        var projectId = UUID.randomUUID();
-        when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH)).thenReturn(Optional.of(projectEntity));
-        when(projectEntity.getId()).thenReturn(projectId);
-        when(redisRepository.keyExists("project:" + projectId + ":view:1.2.3.4")).thenReturn(true);
-
-        projectOutput.findBySlugAndIncrementView("my-project", Language.ENGLISH, "1.2.3.4");
-
-        verify(projectEntity, never()).setViewCount(anyLong());
+        verify(viewCounterOutput).countProjectView(projectId, "1.2.3.4");
+        verifyNoInteractions(redisRepository);
         verify(projectRepository, never()).save(any());
-        verify(redisRepository, never()).set(anyString(), any());
-        verify(redisRepository, never()).addToSortedSet(anyString(), anyString(), anyDouble(), any());
     }
 
     @Test
-    void findBySlugAndIncrementView_notFound_throwsNotFoundException() {
-        when(projectRepository.findBySlugAndLanguage(anyString(), any())).thenReturn(Optional.empty());
+    void findBySlug_authenticated_passesBypassTrueAndCountsPublished() {
+        var projectId = UUID.randomUUID();
+        when(authorRoleChecker.isAuthenticated()).thenReturn(true);
+        when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH, true)).thenReturn(Optional.of(projectEntity));
+        when(projectEntity.getId()).thenReturn(projectId);
+        when(projectEntity.getStatus()).thenReturn(ProjectStatus.PUBLISHED);
+        when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
+
+        projectOutput.findBySlug("my-project", Language.ENGLISH, "1.2.3.4");
+
+        verify(projectRepository).findBySlugAndLanguage("my-project", Language.ENGLISH, true);
+        verify(viewCounterOutput).countProjectView(projectId, "1.2.3.4");
+    }
+
+    @Test
+    void findBySlug_draft_mapsModelWithoutCounting() {
+        when(authorRoleChecker.isAuthenticated()).thenReturn(true);
+        when(projectRepository.findBySlugAndLanguage("draft-project", Language.ENGLISH, true)).thenReturn(Optional.of(projectEntity));
+        when(projectEntity.getStatus()).thenReturn(ProjectStatus.DRAFT);
+        when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
+
+        var result = projectOutput.findBySlug("draft-project", Language.ENGLISH, "1.2.3.4");
+
+        assertEquals(expectedResult, result);
+        verifyNoInteractions(viewCounterOutput);
+        verifyNoInteractions(redisRepository);
+    }
+
+    @Test
+    void findBySlug_notFound_throwsNotFoundException() {
+        when(authorRoleChecker.isAuthenticated()).thenReturn(false);
+        when(projectRepository.findBySlugAndLanguage(anyString(), any(), any())).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class,
-                () -> projectOutput.findBySlugAndIncrementView("nonexistent", Language.ENGLISH, "1.2.3.4"));
+                () -> projectOutput.findBySlug("nonexistent", Language.ENGLISH, "1.2.3.4"));
         assertEquals(ExceptionCode.PROJECT_SLUG_NOT_FOUND, ex.getCode());
+        verifyNoInteractions(viewCounterOutput);
     }
 
     @ParameterizedTest

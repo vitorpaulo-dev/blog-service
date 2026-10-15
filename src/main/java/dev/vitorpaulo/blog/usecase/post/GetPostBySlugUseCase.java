@@ -14,6 +14,6 @@ public class GetPostBySlugUseCase {
     private final PostOutput postOutput;
 
     public PostModel execute(String slug, Language language, String ip) {
-        return postOutput.findBySlugAndIncrementView(slug, language, ip);
+        return postOutput.findBySlug(slug, language, ip);
     }
 }

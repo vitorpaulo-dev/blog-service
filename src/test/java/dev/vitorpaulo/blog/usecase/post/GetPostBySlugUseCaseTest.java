@@ -26,17 +26,17 @@ class GetPostBySlugUseCaseTest {
 
     @Test
     void execute_validSlug_returnsPostWithUserLanguageAudio() {
-        when(postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "203.0.113.7")).thenReturn(expected);
+        when(postOutput.findBySlug("my-post", Language.ENGLISH, "203.0.113.7")).thenReturn(expected);
 
         var result = getPostBySlugUseCase.execute("my-post", Language.ENGLISH, "203.0.113.7");
 
         assertEquals(expected, result);
-        verify(postOutput).findBySlugAndIncrementView("my-post", Language.ENGLISH, "203.0.113.7");
+        verify(postOutput).findBySlug("my-post", Language.ENGLISH, "203.0.113.7");
     }
 
     @Test
     void execute_notFound_propagatesNotFoundException() {
-        when(postOutput.findBySlugAndIncrementView(anyString(), any(), anyString())).thenThrow(new NotFoundException());
+        when(postOutput.findBySlug(anyString(), any(), anyString())).thenThrow(new NotFoundException());
 
         assertThrows(NotFoundException.class,
                 () -> getPostBySlugUseCase.execute("nonexistent", Language.PORTUGUESE, "203.0.113.7"));

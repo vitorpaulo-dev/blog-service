@@ -10,6 +10,7 @@ import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
 import dev.vitorpaulo.blog.output.audio.AudioOutput;
+import dev.vitorpaulo.blog.output.view.ViewCounterOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
@@ -50,6 +51,7 @@ class PostOutputTest {
     @Mock private RedisRepository redisRepository;
     @Mock private AudioOutput audioOutput;
     @Mock private AuthorRoleChecker authorRoleChecker;
+    @Mock private ViewCounterOutput viewCounterOutput;
     @Mock private PostModel post;
     @Mock private PostModel expectedResult;
     @Mock private PostModel secondResult;
@@ -93,60 +95,62 @@ class PostOutputTest {
     }
 
     @Test
-    void findBySlugAndIncrementView_found_incrementsViewCount() {
+    void findBySlug_published_anonymous_mapsModelAndCountsViewWithoutSyncWrites() {
         var postId = UUID.randomUUID();
-        when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
+        when(authorRoleChecker.isAuthenticated()).thenReturn(false);
+        when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH, false)).thenReturn(Optional.of(postEntity));
         when(postEntity.getId()).thenReturn(postId);
-        when(redisRepository.keyExists(eq("post:" + postId + ":view:1.2.3.4"))).thenReturn(false);
-        when(postEntity.getViewCount()).thenReturn(5L);
-        when(postRepository.save(postEntity)).thenReturn(postEntity);
+        when(postEntity.getStatus()).thenReturn(PostStatus.PUBLISHED);
+        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
 
-        postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "1.2.3.4");
+        var result = postOutput.findBySlug("my-post", Language.ENGLISH, "1.2.3.4");
 
-        verify(postEntity).setViewCount(6L);
-        verify(postOutputMapper).toModel(eq(postEntity), anyList(), anyList(), anyMap());
-        verify(redisRepository).set(eq("post:" + postId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
-        verify(redisRepository).addToSortedSet(eq("post:" + postId + ":views"), startsWith("1.2.3.4:"), anyDouble(), eq(Duration.ofHours(48)));
-    }
-
-    @Test
-    void findBySlugAndIncrementView_nullViewCount_setsToOne() {
-        var postId = UUID.randomUUID();
-        when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
-        when(postEntity.getId()).thenReturn(postId);
-        when(redisRepository.keyExists(eq("post:" + postId + ":view:1.2.3.4"))).thenReturn(false);
-        when(postEntity.getViewCount()).thenReturn(null);
-        when(postRepository.save(postEntity)).thenReturn(postEntity);
-
-        postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "1.2.3.4");
-
-        verify(postEntity).setViewCount(1L);
-        verify(redisRepository).set(eq("post:" + postId + ":view:1.2.3.4"), eq(Duration.ofHours(48)));
-        verify(redisRepository).addToSortedSet(eq("post:" + postId + ":views"), startsWith("1.2.3.4:"), anyDouble(), eq(Duration.ofHours(48)));
-    }
-
-    @Test
-    void findBySlugAndIncrementView_keyAlreadyExists_doesNotIncrement() {
-        var postId = UUID.randomUUID();
-        when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH)).thenReturn(Optional.of(postEntity));
-        when(postEntity.getId()).thenReturn(postId);
-        when(redisRepository.keyExists("post:" + postId + ":view:1.2.3.4")).thenReturn(true);
-
-        postOutput.findBySlugAndIncrementView("my-post", Language.ENGLISH, "1.2.3.4");
-
-        verify(postEntity, never()).setViewCount(anyLong());
+        assertEquals(expectedResult, result);
+        verify(viewCounterOutput).countPostView(postId, "1.2.3.4");
+        verifyNoInteractions(redisRepository);
         verify(postRepository, never()).save(any());
-        verify(redisRepository, never()).set(anyString(), any());
-        verify(redisRepository, never()).addToSortedSet(anyString(), anyString(), anyDouble(), any());
     }
 
     @Test
-    void findBySlugAndIncrementView_notFound_throwsNotFoundException() {
-        when(postRepository.findBySlugAndLanguage(anyString(), any())).thenReturn(Optional.empty());
+    void findBySlug_authenticated_passesBypassTrueAndCountsPublished() {
+        var postId = UUID.randomUUID();
+        when(authorRoleChecker.isAuthenticated()).thenReturn(true);
+        when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH, true)).thenReturn(Optional.of(postEntity));
+        when(postEntity.getId()).thenReturn(postId);
+        when(postEntity.getStatus()).thenReturn(PostStatus.PUBLISHED);
+        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
+
+        postOutput.findBySlug("my-post", Language.ENGLISH, "1.2.3.4");
+
+        verify(postRepository).findBySlugAndLanguage("my-post", Language.ENGLISH, true);
+        verify(viewCounterOutput).countPostView(postId, "1.2.3.4");
+    }
+
+    @Test
+    void findBySlug_draft_mapsModelWithoutCounting() {
+        var postId = UUID.randomUUID();
+        when(authorRoleChecker.isAuthenticated()).thenReturn(true);
+        when(postRepository.findBySlugAndLanguage("draft-post", Language.ENGLISH, true)).thenReturn(Optional.of(postEntity));
+        when(postEntity.getId()).thenReturn(postId);
+        when(postEntity.getStatus()).thenReturn(PostStatus.DRAFT);
+        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
+
+        var result = postOutput.findBySlug("draft-post", Language.ENGLISH, "1.2.3.4");
+
+        assertEquals(expectedResult, result);
+        verifyNoInteractions(viewCounterOutput);
+        verifyNoInteractions(redisRepository);
+    }
+
+    @Test
+    void findBySlug_notFound_throwsNotFoundException() {
+        when(authorRoleChecker.isAuthenticated()).thenReturn(false);
+        when(postRepository.findBySlugAndLanguage(anyString(), any(), any())).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class,
-                () -> postOutput.findBySlugAndIncrementView("nonexistent", Language.ENGLISH, "1.2.3.4"));
+                () -> postOutput.findBySlug("nonexistent", Language.ENGLISH, "1.2.3.4"));
         assertEquals(ExceptionCode.POST_SLUG_NOT_FOUND, ex.getCode());
+        verifyNoInteractions(viewCounterOutput);
     }
 
     @ParameterizedTest
