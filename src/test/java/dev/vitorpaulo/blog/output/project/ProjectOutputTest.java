@@ -47,6 +47,7 @@ class ProjectOutputTest {
     @Mock private RedisRepository redisRepository;
     @Mock private AuthorRoleChecker authorRoleChecker;
     @Mock private ViewCounterOutput viewCounterOutput;
+    @Mock private ProjectReadOutput projectReadOutput;
     @Mock private AuthorModel author;
     @Mock private ProjectModel project;
     @Mock private ProjectModel expectedResult;
@@ -89,58 +90,55 @@ class ProjectOutputTest {
     }
 
     @Test
-    void findBySlug_published_anonymous_mapsModelAndCountsViewWithoutSyncWrites() {
+    void findBySlug_published_delegatesToReaderAndCountsView() {
         var projectId = UUID.randomUUID();
         when(authorRoleChecker.isAuthenticated()).thenReturn(false);
-        when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH, false)).thenReturn(Optional.of(projectEntity));
-        when(projectEntity.getId()).thenReturn(projectId);
-        when(projectEntity.getStatus()).thenReturn(ProjectStatus.PUBLISHED);
-        when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
+        when(projectReadOutput.findBySlug("my-project", Language.ENGLISH, false)).thenReturn(expectedResult);
+        when(expectedResult.status()).thenReturn(ProjectStatus.PUBLISHED);
+        when(expectedResult.id()).thenReturn(projectId);
 
         var result = projectOutput.findBySlug("my-project", Language.ENGLISH, "1.2.3.4");
 
         assertEquals(expectedResult, result);
         verify(viewCounterOutput).countProjectView(projectId, "1.2.3.4");
-        verifyNoInteractions(redisRepository);
-        verify(projectRepository, never()).save(any());
     }
 
     @Test
-    void findBySlug_authenticated_passesBypassTrueAndCountsPublished() {
+    void findBySlug_authenticated_passesAuthenticatedFlagToReader() {
         var projectId = UUID.randomUUID();
         when(authorRoleChecker.isAuthenticated()).thenReturn(true);
-        when(projectRepository.findBySlugAndLanguage("my-project", Language.ENGLISH, true)).thenReturn(Optional.of(projectEntity));
-        when(projectEntity.getId()).thenReturn(projectId);
-        when(projectEntity.getStatus()).thenReturn(ProjectStatus.PUBLISHED);
-        when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
+        when(projectReadOutput.findBySlug("my-project", Language.ENGLISH, true)).thenReturn(expectedResult);
+        when(expectedResult.status()).thenReturn(ProjectStatus.PUBLISHED);
+        when(expectedResult.id()).thenReturn(projectId);
 
-        projectOutput.findBySlug("my-project", Language.ENGLISH, "1.2.3.4");
+        var result = projectOutput.findBySlug("my-project", Language.ENGLISH, "1.2.3.4");
 
-        verify(projectRepository).findBySlugAndLanguage("my-project", Language.ENGLISH, true);
+        assertEquals(expectedResult, result);
+        verify(projectReadOutput).findBySlug("my-project", Language.ENGLISH, true);
         verify(viewCounterOutput).countProjectView(projectId, "1.2.3.4");
     }
 
     @Test
-    void findBySlug_draft_mapsModelWithoutCounting() {
+    void findBySlug_draft_returnsModelWithoutCounting() {
         when(authorRoleChecker.isAuthenticated()).thenReturn(true);
-        when(projectRepository.findBySlugAndLanguage("draft-project", Language.ENGLISH, true)).thenReturn(Optional.of(projectEntity));
-        when(projectEntity.getStatus()).thenReturn(ProjectStatus.DRAFT);
-        when(projectOutputMapper.toModel(projectEntity, List.of())).thenReturn(expectedResult);
+        when(projectReadOutput.findBySlug("draft-project", Language.ENGLISH, true)).thenReturn(expectedResult);
+        when(expectedResult.status()).thenReturn(ProjectStatus.DRAFT);
 
         var result = projectOutput.findBySlug("draft-project", Language.ENGLISH, "1.2.3.4");
 
         assertEquals(expectedResult, result);
         verifyNoInteractions(viewCounterOutput);
-        verifyNoInteractions(redisRepository);
     }
 
     @Test
-    void findBySlug_notFound_throwsNotFoundException() {
+    void findBySlug_readerThrows_propagatesWithoutCounting() {
         when(authorRoleChecker.isAuthenticated()).thenReturn(false);
-        when(projectRepository.findBySlugAndLanguage(anyString(), any(), any())).thenReturn(Optional.empty());
+        when(projectReadOutput.findBySlug(anyString(), any(), anyBoolean()))
+                .thenThrow(new NotFoundException(ExceptionCode.PROJECT_SLUG_NOT_FOUND));
 
         var ex = assertThrows(NotFoundException.class,
                 () -> projectOutput.findBySlug("nonexistent", Language.ENGLISH, "1.2.3.4"));
+
         assertEquals(ExceptionCode.PROJECT_SLUG_NOT_FOUND, ex.getCode());
         verifyNoInteractions(viewCounterOutput);
     }

@@ -310,7 +310,7 @@ class AudioOutputTest {
         when(audioRepository.findByPostId(postId)).thenReturn(List.of(narrationEn, narrationPt, podcastEn));
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
 
-        var full = audioOutput.artifactMap(publishedPost(), null);
+        var full = audioOutput.artifactMap(postId, null);
         verifyNoInteractions(postRepository);
 
         assertEquals(2, full.get(AudioType.NARRATION).size());
@@ -327,7 +327,7 @@ class AudioOutputTest {
         when(audioRepository.findByPostId(postId)).thenReturn(List.of(narrationEn, narrationPt));
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
 
-        var filtered = audioOutput.artifactMap(publishedPost(), Language.PORTUGUESE);
+        var filtered = audioOutput.artifactMap(postId, Language.PORTUGUESE);
 
         assertNull(filtered.get(AudioType.NARRATION).get(Language.ENGLISH));
         assertEquals(AudioStatus.GENERATING, filtered.get(AudioType.NARRATION).get(Language.PORTUGUESE).status());
@@ -338,7 +338,7 @@ class AudioOutputTest {
         when(audioRepository.findByPostId(postId)).thenReturn(List.of());
         when(redisRepository.getValue(anyString())).thenReturn(Optional.empty());
 
-        assertTrue(audioOutput.artifactMap(publishedPost(), null).isEmpty());
+        assertTrue(audioOutput.artifactMap(postId, null).isEmpty());
     }
 
     @Test

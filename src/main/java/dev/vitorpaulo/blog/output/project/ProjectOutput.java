@@ -3,6 +3,7 @@ package dev.vitorpaulo.blog.output.project;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.common.util.PostUtils;
+import dev.vitorpaulo.blog.config.cache.CacheConfig;
 import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.ProjectContentEntity;
 import dev.vitorpaulo.blog.domain.ProjectEntity;
@@ -16,6 +17,8 @@ import dev.vitorpaulo.blog.repository.ProjectRepository;
 import dev.vitorpaulo.blog.repository.RedisRepository;
 import dev.vitorpaulo.blog.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
@@ -36,6 +39,7 @@ public class ProjectOutput {
 	private final RedisRepository redisRepository;
 	private final AuthorRoleChecker authorRoleChecker;
 	private final ViewCounterOutput viewCounterOutput;
+	private final ProjectReadOutput projectReadOutput;
 
 	private static final String KEY_PREFIX = "project:";
 	private static final String REACTIONS_KEY_SUFFIX = ":reactions";
@@ -48,19 +52,16 @@ public class ProjectOutput {
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
 	}
 
-	@Transactional(readOnly = true)
 	public ProjectModel findBySlug(String slug, Language language, String ip) {
-		final var entity = projectRepository.findBySlugAndLanguage(slug, language, authorRoleChecker.isAuthenticated())
-			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_SLUG_NOT_FOUND));
-
-		if (entity.getStatus() == ProjectStatus.PUBLISHED) {
-			viewCounterOutput.countProjectView(entity.getId(), ip);
+		final var model = projectReadOutput.findBySlug(slug, language, authorRoleChecker.isAuthenticated());
+		if (model.status() == ProjectStatus.PUBLISHED) {
+			viewCounterOutput.countProjectView(model.id(), ip);
 		}
-
-		return projectOutputMapper.toModel(entity, Collections.emptyList());
+		return model;
 	}
 
 	@Transactional
+	@CacheEvict(cacheNames = CacheConfig.PROJECT_SLUG, allEntries = true)
 	public ReactionModel react(String slug, ReactionType reactionType, String ip) {
 		final var entity = projectRepository.findBySlugAndStatus(slug, ProjectStatus.PUBLISHED)
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
@@ -98,6 +99,7 @@ public class ProjectOutput {
 	}
 
 	@Transactional
+	@CacheEvict(cacheNames = {CacheConfig.PROJECT_SEARCH, CacheConfig.PROJECT_SLUG, CacheConfig.PROJECT_BATCH}, allEntries = true)
 	public ProjectModel save(ProjectModel project, List<UUID> tagIds, AuthorModel author) {
 		final var firstContent = getFirstContent(project.translations());
 		final var slug = generateUniqueSlug(firstContent.title(), null);
@@ -114,6 +116,7 @@ public class ProjectOutput {
 	}
 
 	@Transactional
+	@CacheEvict(cacheNames = {CacheConfig.PROJECT_SEARCH, CacheConfig.PROJECT_SLUG, CacheConfig.PROJECT_BATCH}, allEntries = true)
 	public ProjectModel update(ProjectModel project, List<UUID> tagIds, AuthorModel author) {
 		final var entity = projectRepository.findByIdWithAuthor(project.id(), author.id(), authorRoleChecker.isAdmin())
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.PROJECT_NOT_FOUND));
@@ -136,12 +139,14 @@ public class ProjectOutput {
 	}
 
 	@Transactional
+	@CacheEvict(cacheNames = {CacheConfig.PROJECT_SEARCH, CacheConfig.PROJECT_SLUG, CacheConfig.PROJECT_BATCH, CacheConfig.POST_SLUG}, allEntries = true)
 	public void deleteAll(List<UUID> ids, AuthorModel author) {
 		final var entities = projectRepository.findAllByIdWithAuthor(ids, author.id(), authorRoleChecker.isAdmin());
 		projectRepository.deleteAll(entities);
 	}
 
 	@Transactional(readOnly = true)
+	@Cacheable(cacheNames = CacheConfig.PROJECT_SEARCH, key = "@cacheKeys.projectSearch(#pageableInput, #author)")
 	public PaginatedOutput<ProjectModel> search(PaginatedInput<ProjectQueryModel> pageableInput, AuthorModel author) {
 		final var query = pageableInput.query();
 		final var language = query != null ? query.language() : null;
@@ -175,6 +180,7 @@ public class ProjectOutput {
 	}
 
 	@Transactional(readOnly = true)
+	@Cacheable(cacheNames = CacheConfig.PROJECT_BATCH, key = "@cacheKeys.batch(#ids, #language)")
 	public List<ProjectModel> findAllById(List<UUID> ids, Language language) {
 		return projectRepository.findAllByIdWithSingleContent(ids, language)
 			.stream()
@@ -185,7 +191,7 @@ public class ProjectOutput {
 
 				contents.keySet().removeIf(key -> key != language);
 			})
-			.toList();
+			.collect(Collectors.toList());
 	}
 
 	private boolean showsDrafts(UUID filterAuthorId, AuthorModel author) {

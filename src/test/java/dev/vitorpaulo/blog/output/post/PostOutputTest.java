@@ -52,6 +52,7 @@ class PostOutputTest {
     @Mock private AudioOutput audioOutput;
     @Mock private AuthorRoleChecker authorRoleChecker;
     @Mock private ViewCounterOutput viewCounterOutput;
+    @Mock private PostReadOutput postReadOutput;
     @Mock private PostModel post;
     @Mock private PostModel expectedResult;
     @Mock private PostModel secondResult;
@@ -95,60 +96,55 @@ class PostOutputTest {
     }
 
     @Test
-    void findBySlug_published_anonymous_mapsModelAndCountsViewWithoutSyncWrites() {
+    void findBySlug_published_delegatesToReaderAndCountsView() {
         var postId = UUID.randomUUID();
         when(authorRoleChecker.isAuthenticated()).thenReturn(false);
-        when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH, false)).thenReturn(Optional.of(postEntity));
-        when(postEntity.getId()).thenReturn(postId);
-        when(postEntity.getStatus()).thenReturn(PostStatus.PUBLISHED);
-        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
+        when(postReadOutput.findBySlug("my-post", Language.ENGLISH, false)).thenReturn(expectedResult);
+        when(expectedResult.status()).thenReturn(PostStatus.PUBLISHED);
+        when(expectedResult.id()).thenReturn(postId);
 
         var result = postOutput.findBySlug("my-post", Language.ENGLISH, "1.2.3.4");
 
         assertEquals(expectedResult, result);
         verify(viewCounterOutput).countPostView(postId, "1.2.3.4");
-        verifyNoInteractions(redisRepository);
-        verify(postRepository, never()).save(any());
     }
 
     @Test
-    void findBySlug_authenticated_passesBypassTrueAndCountsPublished() {
+    void findBySlug_authenticated_passesAuthenticatedFlagToReader() {
         var postId = UUID.randomUUID();
         when(authorRoleChecker.isAuthenticated()).thenReturn(true);
-        when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH, true)).thenReturn(Optional.of(postEntity));
-        when(postEntity.getId()).thenReturn(postId);
-        when(postEntity.getStatus()).thenReturn(PostStatus.PUBLISHED);
-        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
+        when(postReadOutput.findBySlug("my-post", Language.ENGLISH, true)).thenReturn(expectedResult);
+        when(expectedResult.status()).thenReturn(PostStatus.PUBLISHED);
+        when(expectedResult.id()).thenReturn(postId);
 
-        postOutput.findBySlug("my-post", Language.ENGLISH, "1.2.3.4");
+        var result = postOutput.findBySlug("my-post", Language.ENGLISH, "1.2.3.4");
 
-        verify(postRepository).findBySlugAndLanguage("my-post", Language.ENGLISH, true);
+        assertEquals(expectedResult, result);
+        verify(postReadOutput).findBySlug("my-post", Language.ENGLISH, true);
         verify(viewCounterOutput).countPostView(postId, "1.2.3.4");
     }
 
     @Test
-    void findBySlug_draft_mapsModelWithoutCounting() {
-        var postId = UUID.randomUUID();
+    void findBySlug_draft_returnsModelWithoutCounting() {
         when(authorRoleChecker.isAuthenticated()).thenReturn(true);
-        when(postRepository.findBySlugAndLanguage("draft-post", Language.ENGLISH, true)).thenReturn(Optional.of(postEntity));
-        when(postEntity.getId()).thenReturn(postId);
-        when(postEntity.getStatus()).thenReturn(PostStatus.DRAFT);
-        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
+        when(postReadOutput.findBySlug("draft-post", Language.ENGLISH, true)).thenReturn(expectedResult);
+        when(expectedResult.status()).thenReturn(PostStatus.DRAFT);
 
         var result = postOutput.findBySlug("draft-post", Language.ENGLISH, "1.2.3.4");
 
         assertEquals(expectedResult, result);
         verifyNoInteractions(viewCounterOutput);
-        verifyNoInteractions(redisRepository);
     }
 
     @Test
-    void findBySlug_notFound_throwsNotFoundException() {
+    void findBySlug_readerThrows_propagatesWithoutCounting() {
         when(authorRoleChecker.isAuthenticated()).thenReturn(false);
-        when(postRepository.findBySlugAndLanguage(anyString(), any(), any())).thenReturn(Optional.empty());
+        when(postReadOutput.findBySlug(anyString(), any(), anyBoolean()))
+                .thenThrow(new NotFoundException(ExceptionCode.POST_SLUG_NOT_FOUND));
 
         var ex = assertThrows(NotFoundException.class,
                 () -> postOutput.findBySlug("nonexistent", Language.ENGLISH, "1.2.3.4"));
+
         assertEquals(ExceptionCode.POST_SLUG_NOT_FOUND, ex.getCode());
         verifyNoInteractions(viewCounterOutput);
     }
