@@ -4,6 +4,7 @@ import dev.vitorpaulo.blog.client.audio.AudioJobRequest;
 import dev.vitorpaulo.blog.client.audio.AudioWorkerFeignClient;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
+import dev.vitorpaulo.blog.config.cache.CacheConfig;
 import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.AudioEntity;
 import dev.vitorpaulo.blog.domain.AuthorEntity;
@@ -29,15 +30,18 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.cache.annotation.CacheEvict;
 
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -421,6 +425,17 @@ class AudioOutputTest {
             () -> audioOutput.retry(postId, AudioType.NARRATION, Language.ENGLISH, ownerAuthor()));
 
         verifyNoInteractions(audioWorkerFeignClient, storageOutput);
+    }
+
+    @Test
+    void retry_evictsPostSlugAllEntries() throws NoSuchMethodException {
+        var evict = AudioOutput.class
+            .getDeclaredMethod("retry", UUID.class, AudioType.class, Language.class, AuthorModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.POST_SLUG), Set.of(evict.cacheNames()));
     }
 
     private void stubArtifactSave() {

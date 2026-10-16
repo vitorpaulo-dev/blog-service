@@ -3,6 +3,7 @@ package dev.vitorpaulo.blog.output.post;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
+import dev.vitorpaulo.blog.config.cache.CacheConfig;
 import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
@@ -25,17 +26,21 @@ import org.mockito.InjectMocks;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -616,6 +621,107 @@ class PostOutputTest {
         assertEquals(List.of(expectedResult, secondResult), result);
         assertTrue(translations.containsKey(Language.ENGLISH));
         assertFalse(translations.containsKey(Language.PORTUGUESE));
+    }
+
+    @Test
+    void findFeatured_returnsMutableListRoot() {
+        when(postRepository.findFeatured()).thenReturn(List.of());
+
+        var result = postOutput.findFeatured(Language.ENGLISH);
+
+        assertInstanceOf(ArrayList.class, result);
+    }
+
+    @Test
+    void findBySlug_isCacheablePostSlug() throws NoSuchMethodException {
+        var cacheable = PostOutput.class
+            .getDeclaredMethod("findBySlug", String.class, Language.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.POST_SLUG), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.slug(#slug, #language, @authorRoleChecker.isAuthenticated())", cacheable.key());
+    }
+
+    @Test
+    void findFeatured_isCacheableFeaturedPosts() throws NoSuchMethodException {
+        var cacheable = PostOutput.class
+            .getDeclaredMethod("findFeatured", Language.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.FEATURED_POSTS), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.featured(#language)", cacheable.key());
+    }
+
+    @Test
+    void search_isCacheablePostSearch() throws NoSuchMethodException {
+        var cacheable = PostOutput.class
+            .getDeclaredMethod("search", PaginatedInput.class, AuthorModel.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.POST_SEARCH), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.postSearch(#pageableInput, #author)", cacheable.key());
+    }
+
+    @Test
+    void save_evictsPostCachesAllEntries() throws NoSuchMethodException {
+        var evict = PostOutput.class
+            .getDeclaredMethod("save", PostModel.class, List.class, List.class, AuthorModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void update_evictsPostCachesAllEntries() throws NoSuchMethodException {
+        var evict = PostOutput.class
+            .getDeclaredMethod("update", PostModel.class, List.class, List.class, AuthorModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void deleteByIds_evictsPostCachesAllEntries() throws NoSuchMethodException {
+        var evict = PostOutput.class
+            .getDeclaredMethod("deleteByIds", List.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void setFeaturedWeights_evictsPostCachesAllEntries() throws NoSuchMethodException {
+        var evict = PostOutput.class
+            .getDeclaredMethod("setFeaturedWeights", List.class, AuthorModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void react_evictsPostSlugAllEntries() throws NoSuchMethodException {
+        var evict = PostOutput.class
+            .getDeclaredMethod("react", String.class, ReactionType.class, String.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.POST_SLUG), Set.of(evict.cacheNames()));
     }
 
     private PaginatedInput<PostQueryModel> input(PostQueryModel query, String sort, Sort.Direction direction) {

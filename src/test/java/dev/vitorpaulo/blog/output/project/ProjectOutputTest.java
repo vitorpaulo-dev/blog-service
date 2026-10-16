@@ -4,6 +4,7 @@ import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.domain.ProjectContentEntity;
 import dev.vitorpaulo.blog.domain.ProjectEntity;
+import dev.vitorpaulo.blog.config.cache.CacheConfig;
 import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.model.*;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
@@ -20,6 +21,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -30,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -570,6 +574,97 @@ class ProjectOutputTest {
         assertTrue(result.content().isEmpty());
         verify(projectRepository).search(isNull(), isNull(), isNull(), isNull(), eq(false),
                 any(PageRequest.class), eq("created_at ASC, updated_at ASC"));
+    }
+
+    @Test
+    void findAllById_returnsMutableListRoot() {
+        var id = UUID.randomUUID();
+        when(projectRepository.findAllByIdWithSingleContent(List.of(id), Language.ENGLISH)).thenReturn(List.of());
+
+        var result = projectOutput.findAllById(List.of(id), Language.ENGLISH);
+
+        assertInstanceOf(ArrayList.class, result);
+    }
+
+    @Test
+    void findBySlug_isCacheableProjectSlug() throws NoSuchMethodException {
+        var cacheable = ProjectOutput.class
+            .getDeclaredMethod("findBySlug", String.class, Language.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.PROJECT_SLUG), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.slug(#slug, #language, @authorRoleChecker.isAuthenticated())", cacheable.key());
+    }
+
+    @Test
+    void search_isCacheableProjectSearch() throws NoSuchMethodException {
+        var cacheable = ProjectOutput.class
+            .getDeclaredMethod("search", PaginatedInput.class, AuthorModel.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.PROJECT_SEARCH), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.projectSearch(#pageableInput, #author)", cacheable.key());
+    }
+
+    @Test
+    void findAllById_isCacheableProjectBatch() throws NoSuchMethodException {
+        var cacheable = ProjectOutput.class
+            .getDeclaredMethod("findAllById", List.class, Language.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.PROJECT_BATCH), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.batch(#ids, #language)", cacheable.key());
+    }
+
+    @Test
+    void save_evictsProjectCachesAllEntries() throws NoSuchMethodException {
+        var evict = ProjectOutput.class
+            .getDeclaredMethod("save", ProjectModel.class, List.class, AuthorModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.PROJECT_SEARCH, CacheConfig.PROJECT_SLUG, CacheConfig.PROJECT_BATCH),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void update_evictsProjectCachesAllEntries() throws NoSuchMethodException {
+        var evict = ProjectOutput.class
+            .getDeclaredMethod("update", ProjectModel.class, List.class, AuthorModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.PROJECT_SEARCH, CacheConfig.PROJECT_SLUG, CacheConfig.PROJECT_BATCH),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void deleteAll_evictsProjectCachesAndPostSlugAllEntries() throws NoSuchMethodException {
+        var evict = ProjectOutput.class
+            .getDeclaredMethod("deleteAll", List.class, AuthorModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.PROJECT_SEARCH, CacheConfig.PROJECT_SLUG, CacheConfig.PROJECT_BATCH,
+                CacheConfig.POST_SLUG),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void react_evictsProjectSlugAllEntries() throws NoSuchMethodException {
+        var evict = ProjectOutput.class
+            .getDeclaredMethod("react", String.class, ReactionType.class, String.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.PROJECT_SLUG), Set.of(evict.cacheNames()));
     }
 
     private PaginatedInput<ProjectQueryModel> input(ProjectQueryModel query, String sort, Sort.Direction direction) {
