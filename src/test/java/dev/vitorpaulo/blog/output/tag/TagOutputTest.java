@@ -2,9 +2,11 @@ package dev.vitorpaulo.blog.output.tag;
 
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
+import dev.vitorpaulo.blog.config.cache.CacheConfig;
 import dev.vitorpaulo.blog.domain.TagEntity;
 import dev.vitorpaulo.blog.model.Language;
 import dev.vitorpaulo.blog.model.TagModel;
+import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.TagOutputMapper;
 import dev.vitorpaulo.blog.repository.TagRepository;
 import org.junit.jupiter.api.Test;
@@ -12,10 +14,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -100,5 +106,72 @@ class TagOutputTest {
         assertEquals(1, result.size());
         assertTrue(translations.containsKey(Language.PORTUGUESE));
         assertFalse(translations.containsKey(Language.ENGLISH));
+    }
+
+    @Test
+    void findAllById_returnsMutableListRoot() {
+        var id = UUID.randomUUID();
+        when(tagRepository.findWithSingleContent(List.of(id))).thenReturn(List.of());
+
+        var result = tagOutput.findAllById(List.of(id), Language.ENGLISH);
+
+        assertInstanceOf(ArrayList.class, result);
+    }
+
+    @Test
+    void search_isCacheableTagSearch() throws NoSuchMethodException {
+        var cacheable = TagOutput.class
+            .getDeclaredMethod("search", PaginatedInput.class, Language.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.TAG_SEARCH), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.tagSearch(#input, #language)", cacheable.key());
+    }
+
+    @Test
+    void findAllById_isCacheableTagBatch() throws NoSuchMethodException {
+        var cacheable = TagOutput.class
+            .getDeclaredMethod("findAllById", List.class, Language.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.TAG_BATCH), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.batch(#ids, #language)", cacheable.key());
+    }
+
+    @Test
+    void save_evictsTagCachesAllEntries() throws NoSuchMethodException {
+        var evict = TagOutput.class
+            .getDeclaredMethod("save", TagModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.TAG_SEARCH, CacheConfig.TAG_BATCH), Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void update_evictsTagCachesAllEntries() throws NoSuchMethodException {
+        var evict = TagOutput.class
+            .getDeclaredMethod("update", TagModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.TAG_SEARCH, CacheConfig.TAG_BATCH), Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void deleteAll_evictsTagCachesAndPostCachesAllEntries() throws NoSuchMethodException {
+        var evict = TagOutput.class
+            .getDeclaredMethod("deleteAll", List.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.TAG_SEARCH, CacheConfig.TAG_BATCH, CacheConfig.POST_SEARCH,
+                CacheConfig.POST_SLUG),
+            Set.of(evict.cacheNames()));
     }
 }

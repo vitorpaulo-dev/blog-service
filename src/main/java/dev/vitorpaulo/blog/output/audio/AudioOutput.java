@@ -5,6 +5,7 @@ import dev.vitorpaulo.blog.client.audio.AudioWorkerFeignClient;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
+import dev.vitorpaulo.blog.config.cache.CacheConfig;
 import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.AudioEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
@@ -22,6 +23,7 @@ import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.RedisRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,6 +78,7 @@ public class AudioOutput {
 	}
 
 	@Transactional
+	@CacheEvict(cacheNames = CacheConfig.POST_SLUG, allEntries = true)
 	public AudioModel retry(UUID postId, AudioType type, Language language, AuthorModel requester) {
 		final var post = findPost(postId);
 		authorize(requester, post);
@@ -94,10 +97,10 @@ public class AudioOutput {
 	}
 
 	@Transactional(readOnly = true)
-	public Map<AudioType, Map<Language, AudioModel>> artifactMap(PostEntity post, Language language) {
+	public Map<AudioType, Map<Language, AudioModel>> artifactMap(UUID postId, Language language) {
 		final var result = new EnumMap<AudioType, Map<Language, AudioModel>>(AudioType.class);
 
-		for (var model : artifacts(post.getId())) {
+		for (var model : artifacts(postId)) {
 			if (language != null && model.language() != language) {
 				continue;
 			}

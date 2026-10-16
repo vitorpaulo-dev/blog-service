@@ -3,14 +3,15 @@ package dev.vitorpaulo.blog.output.post;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
+import dev.vitorpaulo.blog.config.cache.CacheConfig;
 import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.model.*;
+import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
 import dev.vitorpaulo.blog.output.audio.AudioOutput;
-import dev.vitorpaulo.blog.output.view.ViewCounterOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
 import dev.vitorpaulo.blog.repository.PostRepository;
 import dev.vitorpaulo.blog.repository.ProjectRepository;
@@ -25,15 +26,21 @@ import org.mockito.InjectMocks;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -51,12 +58,12 @@ class PostOutputTest {
     @Mock private RedisRepository redisRepository;
     @Mock private AudioOutput audioOutput;
     @Mock private AuthorRoleChecker authorRoleChecker;
-    @Mock private ViewCounterOutput viewCounterOutput;
     @Mock private PostModel post;
     @Mock private PostModel expectedResult;
     @Mock private PostModel secondResult;
     @Mock private PostEntity postEntity;
     @Mock private PostEntity secondPostEntity;
+    @Mock private AudioModel audioModel;
     @Mock private PostContentEntity existingContent;
     @Mock private PostContentEntity newContent;
     @Mock private PostContentModel postContentModel;
@@ -95,62 +102,60 @@ class PostOutputTest {
     }
 
     @Test
-    void findBySlug_published_anonymous_mapsModelAndCountsViewWithoutSyncWrites() {
-        var postId = UUID.randomUUID();
-        when(authorRoleChecker.isAuthenticated()).thenReturn(false);
-        when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH, false)).thenReturn(Optional.of(postEntity));
-        when(postEntity.getId()).thenReturn(postId);
-        when(postEntity.getStatus()).thenReturn(PostStatus.PUBLISHED);
-        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
-
-        var result = postOutput.findBySlug("my-post", Language.ENGLISH, "1.2.3.4");
-
-        assertEquals(expectedResult, result);
-        verify(viewCounterOutput).countPostView(postId, "1.2.3.4");
-        verifyNoInteractions(redisRepository);
-        verify(postRepository, never()).save(any());
-    }
-
-    @Test
-    void findBySlug_authenticated_passesBypassTrueAndCountsPublished() {
+    void findBySlug_found_mapsWithProjectTagIdsAudioAndAuthFlag() {
         var postId = UUID.randomUUID();
         when(authorRoleChecker.isAuthenticated()).thenReturn(true);
         when(postRepository.findBySlugAndLanguage("my-post", Language.ENGLISH, true)).thenReturn(Optional.of(postEntity));
         when(postEntity.getId()).thenReturn(postId);
-        when(postEntity.getStatus()).thenReturn(PostStatus.PUBLISHED);
-        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
+        when(postRepository.findProjectIds(postId)).thenReturn(List.of());
+        when(postRepository.findTagIds(postId)).thenReturn(List.of());
+        when(audioOutput.artifactMap(postId, Language.ENGLISH)).thenReturn(Map.of());
+        when(postOutputMapper.toModel(postEntity, List.of(), List.of(), Map.of())).thenReturn(expectedResult);
 
-        postOutput.findBySlug("my-post", Language.ENGLISH, "1.2.3.4");
-
-        verify(postRepository).findBySlugAndLanguage("my-post", Language.ENGLISH, true);
-        verify(viewCounterOutput).countPostView(postId, "1.2.3.4");
-    }
-
-    @Test
-    void findBySlug_draft_mapsModelWithoutCounting() {
-        var postId = UUID.randomUUID();
-        when(authorRoleChecker.isAuthenticated()).thenReturn(true);
-        when(postRepository.findBySlugAndLanguage("draft-post", Language.ENGLISH, true)).thenReturn(Optional.of(postEntity));
-        when(postEntity.getId()).thenReturn(postId);
-        when(postEntity.getStatus()).thenReturn(PostStatus.DRAFT);
-        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
-
-        var result = postOutput.findBySlug("draft-post", Language.ENGLISH, "1.2.3.4");
+        var result = postOutput.findBySlug("my-post", Language.ENGLISH);
 
         assertEquals(expectedResult, result);
-        verifyNoInteractions(viewCounterOutput);
-        verifyNoInteractions(redisRepository);
+        verify(postRepository).findBySlugAndLanguage("my-post", Language.ENGLISH, true);
     }
 
     @Test
     void findBySlug_notFound_throwsNotFoundException() {
         when(authorRoleChecker.isAuthenticated()).thenReturn(false);
-        when(postRepository.findBySlugAndLanguage(anyString(), any(), any())).thenReturn(Optional.empty());
+        when(postRepository.findBySlugAndLanguage("nonexistent", Language.ENGLISH, false)).thenReturn(Optional.empty());
 
         var ex = assertThrows(NotFoundException.class,
-                () -> postOutput.findBySlug("nonexistent", Language.ENGLISH, "1.2.3.4"));
+                () -> postOutput.findBySlug("nonexistent", Language.ENGLISH));
+
         assertEquals(ExceptionCode.POST_SLUG_NOT_FOUND, ex.getCode());
-        verifyNoInteractions(viewCounterOutput);
+        verifyNoInteractions(postOutputMapper);
+        verifyNoInteractions(audioOutput);
+    }
+
+    @Test
+    void findBySlug_audioEnumMap_mappedToSerializationSafeLinkedHashMaps() {
+        var postId = UUID.randomUUID();
+        var audio = new EnumMap<AudioType, Map<Language, AudioModel>>(AudioType.class);
+        var byLanguage = new EnumMap<Language, AudioModel>(Language.class);
+        byLanguage.put(Language.PORTUGUESE, audioModel);
+        audio.put(AudioType.PODCAST, byLanguage);
+
+        when(authorRoleChecker.isAuthenticated()).thenReturn(false);
+        when(postRepository.findBySlugAndLanguage("my-post", Language.PORTUGUESE, false)).thenReturn(Optional.of(postEntity));
+        when(postEntity.getId()).thenReturn(postId);
+        when(postRepository.findProjectIds(postId)).thenReturn(List.of());
+        when(postRepository.findTagIds(postId)).thenReturn(List.of());
+        when(audioOutput.artifactMap(postId, Language.PORTUGUESE)).thenReturn(audio);
+        when(postOutputMapper.toModel(eq(postEntity), anyList(), anyList(), anyMap())).thenReturn(expectedResult);
+
+        var result = postOutput.findBySlug("my-post", Language.PORTUGUESE);
+
+        assertEquals(expectedResult, result);
+        var captor = ArgumentCaptor.forClass(Map.class);
+        verify(postOutputMapper).toModel(eq(postEntity), anyList(), anyList(), captor.capture());
+        var cachedAudio = captor.getValue();
+        assertInstanceOf(LinkedHashMap.class, cachedAudio);
+        assertEquals(audio, cachedAudio);
+        assertInstanceOf(LinkedHashMap.class, cachedAudio.get(AudioType.PODCAST));
     }
 
     @ParameterizedTest
@@ -616,6 +621,107 @@ class PostOutputTest {
         assertEquals(List.of(expectedResult, secondResult), result);
         assertTrue(translations.containsKey(Language.ENGLISH));
         assertFalse(translations.containsKey(Language.PORTUGUESE));
+    }
+
+    @Test
+    void findFeatured_returnsMutableListRoot() {
+        when(postRepository.findFeatured()).thenReturn(List.of());
+
+        var result = postOutput.findFeatured(Language.ENGLISH);
+
+        assertInstanceOf(ArrayList.class, result);
+    }
+
+    @Test
+    void findBySlug_isCacheablePostSlug() throws NoSuchMethodException {
+        var cacheable = PostOutput.class
+            .getDeclaredMethod("findBySlug", String.class, Language.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.POST_SLUG), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.slug(#slug, #language, @authorRoleChecker.isAuthenticated())", cacheable.key());
+    }
+
+    @Test
+    void findFeatured_isCacheableFeaturedPosts() throws NoSuchMethodException {
+        var cacheable = PostOutput.class
+            .getDeclaredMethod("findFeatured", Language.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.FEATURED_POSTS), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.featured(#language)", cacheable.key());
+    }
+
+    @Test
+    void search_isCacheablePostSearch() throws NoSuchMethodException {
+        var cacheable = PostOutput.class
+            .getDeclaredMethod("search", PaginatedInput.class, AuthorModel.class)
+            .getAnnotation(Cacheable.class);
+
+        assertNotNull(cacheable);
+        assertEquals(Set.of(CacheConfig.POST_SEARCH), Set.of(cacheable.cacheNames()));
+        assertEquals("@cacheKeys.postSearch(#pageableInput, #author)", cacheable.key());
+    }
+
+    @Test
+    void save_evictsPostCachesAllEntries() throws NoSuchMethodException {
+        var evict = PostOutput.class
+            .getDeclaredMethod("save", PostModel.class, List.class, List.class, AuthorModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void update_evictsPostCachesAllEntries() throws NoSuchMethodException {
+        var evict = PostOutput.class
+            .getDeclaredMethod("update", PostModel.class, List.class, List.class, AuthorModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void deleteByIds_evictsPostCachesAllEntries() throws NoSuchMethodException {
+        var evict = PostOutput.class
+            .getDeclaredMethod("deleteByIds", List.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void setFeaturedWeights_evictsPostCachesAllEntries() throws NoSuchMethodException {
+        var evict = PostOutput.class
+            .getDeclaredMethod("setFeaturedWeights", List.class, AuthorModel.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG),
+            Set.of(evict.cacheNames()));
+    }
+
+    @Test
+    void react_evictsPostSlugAllEntries() throws NoSuchMethodException {
+        var evict = PostOutput.class
+            .getDeclaredMethod("react", String.class, ReactionType.class, String.class)
+            .getAnnotation(CacheEvict.class);
+
+        assertNotNull(evict);
+        assertTrue(evict.allEntries());
+        assertEquals(Set.of(CacheConfig.POST_SLUG), Set.of(evict.cacheNames()));
     }
 
     private PaginatedInput<PostQueryModel> input(PostQueryModel query, String sort, Sort.Direction direction) {

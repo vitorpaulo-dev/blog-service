@@ -3,6 +3,7 @@ package dev.vitorpaulo.blog.output.tag;
 import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.common.util.PostUtils;
+import dev.vitorpaulo.blog.config.cache.CacheConfig;
 import dev.vitorpaulo.blog.domain.TagContentEntity;
 import dev.vitorpaulo.blog.domain.TagEntity;
 import dev.vitorpaulo.blog.output.mapper.TagOutputMapper;
@@ -14,6 +15,8 @@ import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
@@ -39,6 +42,7 @@ public class TagOutput {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CacheConfig.TAG_SEARCH, CacheConfig.TAG_BATCH}, allEntries = true)
     public TagModel save(TagModel tag) {
         final var firstContent = getFirstContent(tag.translations());
         final var slug = generateUniqueSlug(firstContent.name(), null);
@@ -53,6 +57,7 @@ public class TagOutput {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CacheConfig.TAG_SEARCH, CacheConfig.TAG_BATCH}, allEntries = true)
     public TagModel update(TagModel tag) {
         final var entity = tagRepository.findById(tag.id())
             .orElseThrow(() -> new NotFoundException(ExceptionCode.TAG_NOT_FOUND));
@@ -73,10 +78,12 @@ public class TagOutput {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CacheConfig.TAG_SEARCH, CacheConfig.TAG_BATCH, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG}, allEntries = true)
     public void deleteAll(List<UUID> ids) {
         tagRepository.deleteByIdIn(ids);
     }
 
+    @Cacheable(cacheNames = CacheConfig.TAG_SEARCH, key = "@cacheKeys.tagSearch(#input, #language)")
     public PaginatedOutput<TagModel> search(PaginatedInput<TagQueryModel> input, Language language) {
         final var pageable = PageRequest.of(input.page(), input.size(), Sort.by(
             input.direction() != null ? input.direction() : Sort.Direction.ASC, mapSortProperty(input.sort())));
@@ -100,6 +107,7 @@ public class TagOutput {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheConfig.TAG_BATCH, key = "@cacheKeys.batch(#ids, #language)")
     public List<TagModel> findAllById(List<UUID> ids, Language language) {
         return tagRepository.findWithSingleContent(ids).stream()
             .map(tagOutputMapper::toModel)
@@ -109,7 +117,7 @@ public class TagOutput {
 
 				contents.keySet().removeIf(key -> key != language);
 			})
-            .toList();
+            .collect(Collectors.toList());
     }
 
     private void syncContents(TagEntity entity, Map<Language, TagContentModel> translations) {

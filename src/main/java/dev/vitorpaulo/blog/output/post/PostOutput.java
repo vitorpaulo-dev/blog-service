@@ -4,13 +4,14 @@ import dev.vitorpaulo.blog.common.exception.NotFoundException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.BusinessException;
 import dev.vitorpaulo.blog.common.exception.infrastructure.ExceptionCode;
 import dev.vitorpaulo.blog.common.util.PostUtils;
+import dev.vitorpaulo.blog.config.cache.CacheConfig;
 import dev.vitorpaulo.blog.config.security.AuthorRoleChecker;
 import dev.vitorpaulo.blog.domain.PostContentEntity;
 import dev.vitorpaulo.blog.domain.PostEntity;
 import dev.vitorpaulo.blog.output.audio.AudioOutput;
 import dev.vitorpaulo.blog.output.mapper.PostOutputMapper;
-import dev.vitorpaulo.blog.output.view.ViewCounterOutput;
 import dev.vitorpaulo.blog.model.*;
+import dev.vitorpaulo.blog.model.audio.AudioModel;
 import dev.vitorpaulo.blog.model.common.PaginatedInput;
 import dev.vitorpaulo.blog.model.common.PaginatedOutput;
 import dev.vitorpaulo.blog.repository.AuthorRepository;
@@ -19,6 +20,8 @@ import dev.vitorpaulo.blog.repository.ProjectRepository;
 import dev.vitorpaulo.blog.repository.RedisRepository;
 import dev.vitorpaulo.blog.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -41,7 +44,6 @@ public class PostOutput {
     private final RedisRepository redisRepository;
     private final AudioOutput audioOutput;
     private final AuthorRoleChecker authorRoleChecker;
-    private final ViewCounterOutput viewCounterOutput;
 
 	private static final String KEY_PREFIX = "post:";
 	private static final String REACTIONS_KEY_SUFFIX = ":reactions";
@@ -54,12 +56,13 @@ public class PostOutput {
 				entity,
 				postRepository.findProjectIds(id),
 				postRepository.findTagIds(id),
-				audioOutput.artifactMap(entity, null)
+				audioOutput.artifactMap(id, null)
 			))
 			.orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheConfig.POST_SLUG, allEntries = true)
     public ReactionModel react(String slug, ReactionType reactionType, String ip) {
         final var entity = postRepository.findBySlugAndStatus(slug, PostStatus.PUBLISHED)
                 .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_NOT_FOUND));
@@ -96,24 +99,28 @@ public class PostOutput {
         return current == null ? 1L : current + 1;
     }
 
+    @Cacheable(cacheNames = CacheConfig.POST_SLUG, key = "@cacheKeys.slug(#slug, #language, @authorRoleChecker.isAuthenticated())")
     @Transactional(readOnly = true)
-    public PostModel findBySlug(String slug, Language language, String ip) {
+    public PostModel findBySlug(String slug, Language language) {
         final var entity = postRepository.findBySlugAndLanguage(slug, language, authorRoleChecker.isAuthenticated())
                 .orElseThrow(() -> new NotFoundException(ExceptionCode.POST_SLUG_NOT_FOUND));
 
-        if (entity.getStatus() == PostStatus.PUBLISHED) {
-            viewCounterOutput.countPostView(entity.getId(), ip);
-        }
+        return postOutputMapper.toModel(
+            entity,
+            postRepository.findProjectIds(entity.getId()),
+            postRepository.findTagIds(entity.getId()),
+            cacheSafeAudio(audioOutput.artifactMap(entity.getId(), language))
+        );
+    }
 
-		return postOutputMapper.toModel(
-			entity,
-			postRepository.findProjectIds(entity.getId()),
-			postRepository.findTagIds(entity.getId()),
-			audioOutput.artifactMap(entity, language)
-		);
+    private static Map<AudioType, Map<Language, AudioModel>> cacheSafeAudio(Map<AudioType, Map<Language, AudioModel>> source) {
+        final var audio = new LinkedHashMap<AudioType, Map<Language, AudioModel>>(source.size());
+        source.forEach((type, byLanguage) -> audio.put(type, new LinkedHashMap<>(byLanguage)));
+        return audio;
     }
 
 	@Transactional
+	@CacheEvict(cacheNames = {CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG}, allEntries = true)
     public PostModel save(PostModel post, List<UUID> tagIds, List<UUID> projectIds, AuthorModel author) {
         validateTranslations(post.translations());
         final var firstContent = getFirstContent(post.translations());
@@ -143,10 +150,11 @@ public class PostOutput {
 
         final var saved = postRepository.save(entity);
         audioOutput.dispatch(saved);
-        return postOutputMapper.toModel(saved, projectIds, tagIds, audioOutput.artifactMap(saved, null));
+        return postOutputMapper.toModel(saved, projectIds, tagIds, audioOutput.artifactMap(saved.getId(), null));
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG}, allEntries = true)
     public PostModel update(PostModel post, List<UUID> tagIds, List<UUID> projectIds, AuthorModel author) {
         validateTranslations(post.translations());
         final var entity = postRepository.findByIdWithAuthor(post.id(), author.id(), authorRoleChecker.isAdmin())
@@ -170,7 +178,7 @@ public class PostOutput {
 
         final var saved = postRepository.save(entity);
         audioOutput.dispatch(saved);
-        return postOutputMapper.toModel(saved, projectIds, tagIds, audioOutput.artifactMap(saved, null));
+        return postOutputMapper.toModel(saved, projectIds, tagIds, audioOutput.artifactMap(saved.getId(), null));
     }
 
     @Transactional(readOnly = true)
@@ -181,11 +189,13 @@ public class PostOutput {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG}, allEntries = true)
     public void deleteByIds(List<UUID> ids) {
         postRepository.deleteAll(postRepository.findAllById(ids));
     }
 
     @Transactional
+    @CacheEvict(cacheNames = {CacheConfig.FEATURED_POSTS, CacheConfig.POST_SEARCH, CacheConfig.POST_SLUG}, allEntries = true)
     public void setFeaturedWeights(List<FeaturedPostModel> featured, AuthorModel author) {
         final var ids = featured.stream().map(FeaturedPostModel::postId).toList();
 
@@ -201,6 +211,7 @@ public class PostOutput {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheConfig.FEATURED_POSTS, key = "@cacheKeys.featured(#language)")
     public List<PostModel> findFeatured(Language language) {
         return postRepository.findFeatured()
             .stream()
@@ -211,10 +222,11 @@ public class PostOutput {
 
 				contents.keySet().removeIf(key -> key != language);
 			})
-			.toList();
+			.collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheConfig.POST_SEARCH, key = "@cacheKeys.postSearch(#pageableInput, #author)")
     public PaginatedOutput<PostModel> search(PaginatedInput<PostQueryModel> pageableInput, AuthorModel author) {
         final var query = pageableInput.query();
         final var language = query != null ? query.language() : null;
